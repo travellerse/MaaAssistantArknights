@@ -36,6 +36,7 @@ private:
     void move_forward();
     void move_backward();
 
+    bool check_jie_garden_bosky_scheme_exit(const Config::RoguelikeEvent& event, const RoguelikeMode& mode);
     std::optional<std::string> next_event(const Config::RoguelikeEvent& event);
 
     static bool save_img(const cv::Mat& image, std::string_view description = "image");

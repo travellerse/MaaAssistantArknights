@@ -18,11 +18,10 @@ bool asst::RoguelikeBoskyPassageRoutingTaskPlugin::load_params([[maybe_unused]] 
         m_bosky_config = bosky_config->special_params;
 
         // ———————— 选择导航策略 ————————
-        if (m_config->get_mode() == RoguelikeMode::FindPlaytime) {
-            m_bosky_routing_strategy = RoutingStrategy::FindPlaytime_JieGarden;
-            int target = m_config->get_find_playTime_target();
-            RoguelikeBoskyPassageMap::get_instance().set_target_subtype(static_cast<RoguelikeBoskySubNodeType>(target));
-            Log.info(__FUNCTION__, "| FindPlaytime mode enabled with target:", target);
+        if (m_config->get_mode() == RoguelikeMode::FindBoskyNode) {
+            m_bosky_routing_strategy = RoutingStrategy::FindBoskyNode_JieGarden;
+            const auto target = m_config->get_find_bosky_node_target();
+            Log.info(__FUNCTION__, "| FindBoskyNode mode enabled with target:", bosky_node_target_to_string(target));
             return true;
         }
 
@@ -72,18 +71,14 @@ bool asst::RoguelikeBoskyPassageRoutingTaskPlugin::_run()
         bosky_decide_and_click(priority_order);
         break;
     }
-    case RoutingStrategy::FindPlaytime_JieGarden: {
-        // 更新地图
+    case RoutingStrategy::FindBoskyNode_JieGarden: {
         bosky_update_map();
-        const std::vector<RoguelikeNodeType> priority_order = get_bosky_passage_priority("FindPlaytime");
+        const auto target = m_config->get_find_bosky_node_target();
+        const std::string target_str(bosky_node_target_to_string(target));
+        const std::vector<RoguelikeNodeType> priority_order = get_bosky_passage_priority(target_str);
 
-        // 获取目标常乐节点子类型
-        Log.info(
-            __FUNCTION__,
-            "| Looking for playtime subtype:",
-            subtype2name(RoguelikeBoskyPassageMap::get_instance().get_target_subtype()));
+        Log.info(__FUNCTION__, "| Looking for bosky node target:", target_str);
 
-        // 尝试找到目标节点，使用常乐节点优先的策略
         bosky_decide_and_click(priority_order);
         break;
     }

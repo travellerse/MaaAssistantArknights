@@ -362,8 +362,9 @@
         },
         {
             "name": "天圆地方",
-            "option_num": 2,
-            "choose": 2
+            "option_num": 3,
+            "choose": 3,
+            "fallback_choices": [[4, 4]]
         },
         {
             "name": "存形失意",

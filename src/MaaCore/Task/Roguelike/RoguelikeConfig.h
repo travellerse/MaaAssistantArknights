@@ -37,8 +37,17 @@ enum class RoguelikeMode
     FastPass = 10001, // 10001 - 快速通过第一层
 
     // ------------------ 界园主题专用模式 ------------------
-    FindPlaytime = 20001 // 20001 - 刷常乐节点，第一层进洞，找不到需要的节点就重开
+    FindBoskyNode = 20001 // 20001 - 刷树洞节点，第一层进洞，找不到需要的节点就重开
 };
+
+enum class BoskyNodeTarget
+{
+    FindPlaytime,  // 刷常乐节点
+    FindSchemeBox, // 刷筹谋节点(抛出钱盒)
+};
+
+std::string_view bosky_node_target_to_string(BoskyNodeTarget target);
+BoskyNodeTarget bosky_node_target_from_string(std::string_view str);
 
 struct RoguelikeOper
 {
@@ -96,7 +105,7 @@ public:
                mode == RoguelikeMode::Squad || mode == RoguelikeMode::Exploration ||
                (mode == RoguelikeMode::CLP_PDS && theme == RoguelikeTheme::Sami) ||
                (mode == RoguelikeMode::FastPass && theme == RoguelikeTheme::Sarkaz) ||
-               (mode == RoguelikeMode::FindPlaytime && theme == RoguelikeTheme::JieGarden);
+               (mode == RoguelikeMode::FindBoskyNode && theme == RoguelikeTheme::JieGarden);
     }
 
     bool verify_and_load_params(const json::value& params);
@@ -142,10 +151,10 @@ public:
 
     bool get_collectible_mode_shopping() const { return m_collectible_mode_shopping; }
 
-    // ------------------ 刷常乐节点模式 ------------------
-    void set_find_playTime_target(int target) { m_find_playTime_target = target; }
+    // ------------------ 刷树洞节点模式 ------------------
+    void set_find_bosky_node_target(BoskyNodeTarget target) { m_find_bosky_node_target = target; }
 
-    int get_find_playTime_target() const { return m_find_playTime_target; }
+    BoskyNodeTarget get_find_bosky_node_target() const { return m_find_bosky_node_target; }
 
 private:
     std::string m_theme;                       // 主题
@@ -165,8 +174,8 @@ private:
     // ------------------ 刷开局模式 ------------------
     bool m_collectible_mode_shopping = false; // 刷开局模式下进入商店时购物
 
-    // ------------------ 刷常乐节点模式 ------------------
-    int m_find_playTime_target = 0; // 目标常乐节点子类型 (1=令, 2=黍, 3=年)
+    // ------------------ 刷树洞节点模式 ------------------
+    BoskyNodeTarget m_find_bosky_node_target = BoskyNodeTarget::FindPlaytime;
 
 private:
     // =========================== 萨米主题专用参数 ===========================

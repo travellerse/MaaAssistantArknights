@@ -148,15 +148,18 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
             bosky_map.set_node_subtype(bosky_map.get_curr_pos(), RoguelikeBoskySubNodeType::Nian);
         }
 
-        if (bosky_map.get_target_subtype() != RoguelikeBoskySubNodeType::Unknown) {
-            if (bosky_map.get_node_subtype(bosky_map.get_curr_pos()) == bosky_map.get_target_subtype()) {
-                Log.info(__FUNCTION__, "| Found target playtime node, completing task and exiting");
+        if (mode == RoguelikeMode::FindBoskyNode &&
+            m_config->get_find_bosky_node_target() == BoskyNodeTarget::FindPlaytime) {
+            auto current_subtype = bosky_map.get_node_subtype(bosky_map.get_curr_pos());
+            if (current_subtype == RoguelikeBoskySubNodeType::Ling ||
+                current_subtype == RoguelikeBoskySubNodeType::Shu ||
+                current_subtype == RoguelikeBoskySubNodeType::Nian) {
+                Log.info(__FUNCTION__, "| Found playtime node, completing task and exiting");
 
                 auto target_info = basic_info_with_what("RoguelikeJieGardenTargetFound");
-                target_info["details"]["target_subtype"] = subtype2name(bosky_map.get_target_subtype());
+                target_info["details"]["target_subtype"] = subtype2name(current_subtype);
                 callback(AsstMsg::SubTaskExtraInfo, target_info);
 
-                // 完成任务，退出
                 m_control_ptr->exit_then_stop();
                 m_task_ptr->set_enable(false);
                 return std::nullopt;
@@ -168,6 +171,11 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     if (theme == RoguelikeTheme::JieGarden) {
         reset_option_list_and_view_data();
         if (update_option_list()) {
+            // 界园树洞"筹谋"节点寻找概率出现的"抛出钱盒"选项
+            if (check_jie_garden_bosky_scheme_exit(event, mode)) {
+                return std::nullopt;
+            }
+
             size_t choice = 0; // 以 0 作为 无效 index
             if (!event.option_text.empty()) {
                 for (const std::string& event_text : event.option_text) {
@@ -564,6 +572,31 @@ void asst::RoguelikeStageEncounterTaskPlugin::move_backward()
     LogTraceFunction;
 
     ProcessTask(*this, { m_config->get_theme() + "@RoguelikeEncounter-MoveUp" }).run();
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::check_jie_garden_bosky_scheme_exit(
+    const Config::RoguelikeEvent& event,
+    const RoguelikeMode& mode)
+{
+    // 界园树洞"筹谋"节点：天圆地方+抛出钱盒 -> exit_then_stop
+    auto& bosky_map = RoguelikeBoskyPassageMap::get_instance();
+    if (mode == RoguelikeMode::FindBoskyNode &&
+        m_config->get_find_bosky_node_target() == BoskyNodeTarget::FindSchemeBox &&
+        bosky_map.get_node_type(bosky_map.get_curr_pos()) == RoguelikeNodeType::Scheme && event.name == "天圆地方") {
+        for (const auto& opt : m_option_list) {
+            if (opt.text.find("抛出钱盒") != std::string::npos) {
+                Log.info(__FUNCTION__, "| Found option with '抛出钱盒', ready to exit");
+
+                auto target_info = basic_info_with_what("RoguelikeJieGardenTargetFound");
+                callback(AsstMsg::SubTaskExtraInfo, target_info);
+
+                m_control_ptr->exit_then_stop();
+                m_task_ptr->set_enable(false);
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::next_event(const Config::RoguelikeEvent& event)

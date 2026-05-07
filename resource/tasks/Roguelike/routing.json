@@ -182,6 +182,17 @@
             "JieGarden@RoguelikeMapNode-Scheme.png"
         ]
     },
+    "JieGarden@RoguelikeRouting-BoskyPassagePriority_FindSchemeBox": {
+        "doc": ["筹谋>拾遗>传说>故肆>易与>常乐>杂疑(暂时取消)>灾祸(暂时取消)"],
+        "template": [
+            "JieGarden@RoguelikeMapNode-Scheme.png",
+            "JieGarden@RoguelikeMapNode-Omissions.png",
+            "JieGarden@RoguelikeMapNode-Legend.png",
+            "JieGarden@RoguelikeMapNode-OldShop.png",
+            "JieGarden@RoguelikeMapNode-YiTrader.png",
+            "JieGarden@RoguelikeMapNode-Playtime.png"
+        ]
+    },
     "JieGarden@RoguelikeRoutingAction-ExitThenAbandon": {
         "algorithm": "JustReturn",
         "next": ["JieGarden@Roguelike@ExitThenAbandon"]

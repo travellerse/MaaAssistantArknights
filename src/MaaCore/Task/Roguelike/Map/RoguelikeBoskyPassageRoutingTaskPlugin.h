@@ -18,7 +18,7 @@ public:
     {
         None,
         BoskyPassage_JieGarden,
-        FindPlaytime_JieGarden,
+        FindBoskyNode_JieGarden,
     };
 
 protected:
