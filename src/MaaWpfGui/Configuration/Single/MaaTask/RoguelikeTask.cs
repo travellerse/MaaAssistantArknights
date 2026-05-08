@@ -111,9 +111,14 @@ public class RoguelikeTask : BaseTask
     public bool DeepExplorationAutoIterate { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets FindPlaytime 模式的目标常乐节点子类型
+    /// Gets or sets FindBoskyNode 模式的目标节点类别（常乐/筹谋）
     /// </summary>
-    public RoguelikeBoskySubNodeType FindPlaytimeTarget { get; set; } = RoguelikeBoskySubNodeType.Ling;
+    public RoguelikeBoskyNodeTarget BoskyNodeTarget { get; set; } = RoguelikeBoskyNodeTarget.FindPlaytime;
+
+    /// <summary>
+    /// Gets or sets FindBoskyNode 模式的目标常乐节点子类型
+    /// </summary>
+    public RoguelikeBoskySubNodeType BoskyPlaytimeSubNode { get; set; } = RoguelikeBoskySubNodeType.Ling;
 
     /// <summary>
     /// Gets or sets a value indicating whether 使用好友助战
@@ -235,9 +240,25 @@ public enum RoguelikeMode
     Exploration = 7,
 
     /// <summary>
-    /// 20001 - 刷常乐节点，第一层进洞，找不到需要的节点就重开
+    /// 20001 - 刷树洞节点，第一层进洞，找不到需要的节点就重开
     /// </summary>
-    FindPlaytime = 20001,
+    FindBoskyNode = 20001,
+}
+
+/// <summary>
+/// 界园树洞节点目标类别
+/// </summary>
+public enum RoguelikeBoskyNodeTarget
+{
+    /// <summary>
+    /// 刷常乐节点
+    /// </summary>
+    FindPlaytime,
+
+    /// <summary>
+    /// 刷筹谋节点（抛出钱盒）
+    /// </summary>
+    FindSchemeBox,
 }
 
 /// <summary>

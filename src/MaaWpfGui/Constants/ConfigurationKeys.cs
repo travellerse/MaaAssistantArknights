@@ -178,7 +178,7 @@ public static class ConfigurationKeys
     public const string RoguelikeMonthlySquadAutoIterate = "Roguelike.MonthlySquadAutoIterate"; // 已迁移
     public const string RoguelikeMonthlySquadCheckComms = "Roguelike.MonthlySquadCheckComms"; // 已迁移
     public const string RoguelikeDeepExplorationAutoIterate = "Roguelike.DeepExplorationAutoIterate"; // 已迁移
-    public const string RoguelikeFindPlaytimeTarget = "Roguelike.FindPlaytimeTarget"; // 已迁移
+    public const string RoguelikeBoskyPlaytimeSubNode = "Roguelike.FindPlaytimeTarget"; // 已迁移
     public const string ReclamationTheme = "Reclamation.Theme"; // 已迁移
     public const string ReclamationMode = "Reclamation.Mode"; // 已迁移
     public const string ReclamationToolToCraft = "Reclamation.ToolToCraft"; // 已迁移

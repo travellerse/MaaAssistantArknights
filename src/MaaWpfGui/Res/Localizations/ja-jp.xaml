@@ -206,12 +206,15 @@
     <system:String x:Key="RoguelikeCollectibleModeSquad">支援選択を得るモードの分隊</system:String>
     <system:String x:Key="RoguelikeStrategyMonthlySquad">月間小隊をグラインドし、できるだけ多くの層をクリア</system:String>
     <system:String x:Key="RoguelikeStrategyDeepExploration">深層探索をグラインドし、できるだけ多くの層をクリア</system:String>
-    <system:String x:Key="RoguelikeStrategyFindPlaytime">常楽スポットをグラインドし、第一層で洞窟に入り、ターゲットスポットが見つからなければ再起動します</system:String>
-    <system:String x:Key="RoguelikeFindPlaytimeTarget">ターゲット常楽系スポット</system:String>
+    <system:String x:Key="RoguelikeStrategyFindBoskyNode">樹洞ノードをグラインドし、第一層で洞窟に入り、ターゲットノードが見つからなければ再起動します</system:String>
+    <system:String x:Key="RoguelikeBoskyPlaytimeSubNode">ターゲット常楽ノード</system:String>
     <system:String x:Key="RoguelikePlaytimeLing">リィン - 地に擲ちて声有り</system:String>
     <system:String x:Key="RoguelikePlaytimeShu">シュウ - 因を種えて果を得る</system:String>
     <system:String x:Key="RoguelikePlaytimeNian">ニェン - 一人足らぬ</system:String>
-    <system:String x:Key="RoguelikeJieGardenTargetFound">ターゲット常楽スポット {0} を見つけた</system:String>
+    <system:String x:Key="RoguelikeJieGardenTargetFound">ターゲットスポット {0} を見つけた</system:String>
+    <system:String x:Key="RoguelikeSchemeBoxTarget">籌謀スポット（銭箱を投げる）</system:String>
+    <system:String x:Key="RoguelikeBoskyNodeTarget">ターゲット樹洞ノード</system:String>
+    <system:String x:Key="RoguelikeBoskyPlaytimeTarget">常楽スポット</system:String>
     <system:String x:Key="StartingSquad">最初の分隊</system:String>
     <system:String x:Key="StartingRoles">最初の職業</system:String>
     <system:String x:Key="StartingCoreChar">最初の{key=Operator}</system:String>

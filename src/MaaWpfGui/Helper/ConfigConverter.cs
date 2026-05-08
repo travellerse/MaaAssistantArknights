@@ -372,7 +372,7 @@ public class ConfigConverter
                 roguelikeTask.MonthlySquadAutoIterate = ConfigurationHelper.GetValue(ConfigurationKeys.RoguelikeMonthlySquadAutoIterate, false);
                 roguelikeTask.MonthlySquadCheckComms = ConfigurationHelper.GetValue(ConfigurationKeys.RoguelikeMonthlySquadCheckComms, false);
                 roguelikeTask.DeepExplorationAutoIterate = ConfigurationHelper.GetValue(ConfigurationKeys.RoguelikeDeepExplorationAutoIterate, false);
-                roguelikeTask.FindPlaytimeTarget = ConfigurationHelper.GetValue(ConfigurationKeys.RoguelikeFindPlaytimeTarget, RoguelikeBoskySubNodeType.Ling);
+                roguelikeTask.BoskyPlaytimeSubNode = ConfigurationHelper.GetValue(ConfigurationKeys.RoguelikeBoskyPlaytimeSubNode, RoguelikeBoskySubNodeType.Ling);
 
                 Dictionary<string, RoguelikeCollectibleAward> dic = new() {
                     { "Roguelike@LastReward", RoguelikeCollectibleAward.HotWater },

@@ -157,6 +157,8 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                 Log.info(__FUNCTION__, "| Found playtime node, completing task and exiting");
 
                 auto target_info = basic_info_with_what("RoguelikeJieGardenTargetFound");
+                target_info["details"]["target_type"] = "FindPlaytime";
+                target_info["details"]["target_name"] = subtype2name(current_subtype);
                 target_info["details"]["target_subtype"] = subtype2name(current_subtype);
                 callback(AsstMsg::SubTaskExtraInfo, target_info);
 
@@ -588,6 +590,8 @@ bool asst::RoguelikeStageEncounterTaskPlugin::check_jie_garden_bosky_scheme_exit
                 Log.info(__FUNCTION__, "| Found option with '抛出钱盒', ready to exit");
 
                 auto target_info = basic_info_with_what("RoguelikeJieGardenTargetFound");
+                target_info["details"]["target_type"] = "FindSchemeBox";
+                target_info["details"]["target_name"] = "SchemeBox";
                 callback(AsstMsg::SubTaskExtraInfo, target_info);
 
                 m_control_ptr->exit_then_stop();

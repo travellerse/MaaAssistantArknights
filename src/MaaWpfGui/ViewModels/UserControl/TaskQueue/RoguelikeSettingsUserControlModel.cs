@@ -125,7 +125,7 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
                 break;
 
             case Theme.JieGarden:
-                baseList.Add(new() { Display = LocalizationHelper.GetString("RoguelikeStrategyFindPlaytime"), Value = Mode.FindPlaytime });
+                baseList.Add(new() { Display = LocalizationHelper.GetString("RoguelikeStrategyFindBoskyNode"), Value = Mode.FindBoskyNode });
                 break;
         }
 
@@ -765,18 +765,41 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
     }
 
     /// <summary>
-    /// Gets or sets the target playtime subnode type for FindPlaytime mode.
+    /// Gets or sets the bosky node target type for FindBoskyNode mode.
     /// </summary>
-    public RoguelikeBoskySubNodeType RoguelikeFindPlaytimeTarget
+    public RoguelikeBoskyNodeTarget RoguelikeBoskyNodeTarget
     {
-        get => GetTaskConfig<RoguelikeTask>().FindPlaytimeTarget;
-        set => SetTaskConfig<RoguelikeTask>(t => t.FindPlaytimeTarget == value, t => t.FindPlaytimeTarget = value);
+        get => GetTaskConfig<RoguelikeTask>().BoskyNodeTarget;
+        set => SetTaskConfig<RoguelikeTask>(t => t.BoskyNodeTarget == value, t => t.BoskyNodeTarget = value);
     }
 
     /// <summary>
-    /// Gets the list of available playtime target options for FindPlaytime mode.
+    /// Gets the list of available bosky node target options for FindBoskyNode mode.
     /// </summary>
-    public ObservableCollection<GenericCombinedData<RoguelikeBoskySubNodeType>> RoguelikeFindPlaytimeTargetList { get; } =
+    public ObservableCollection<GenericCombinedData<RoguelikeBoskyNodeTarget>> RoguelikeBoskyNodeTargetList { get; } =
+    [
+        new() { Display = LocalizationHelper.GetString("RoguelikeBoskyPlaytimeTarget"), Value = RoguelikeBoskyNodeTarget.FindPlaytime },
+        new() { Display = LocalizationHelper.GetString("RoguelikeSchemeBoxTarget"), Value = RoguelikeBoskyNodeTarget.FindSchemeBox },
+    ];
+
+    /// <summary>
+    /// Gets a value indicating whether the bosky node target selection should be visible.
+    /// </summary>
+    public bool RoguelikeBoskyNodeTargetVisible => RoguelikeMode == Mode.FindBoskyNode;
+
+    /// <summary>
+    /// Gets or sets the target playtime subnode type for FindBoskyNode mode.
+    /// </summary>
+    public RoguelikeBoskySubNodeType RoguelikeBoskyPlaytimeSubNode
+    {
+        get => GetTaskConfig<RoguelikeTask>().BoskyPlaytimeSubNode;
+        set => SetTaskConfig<RoguelikeTask>(t => t.BoskyPlaytimeSubNode == value, t => t.BoskyPlaytimeSubNode = value);
+    }
+
+    /// <summary>
+    /// Gets the list of available playtime subnode options for FindBoskyNode mode.
+    /// </summary>
+    public ObservableCollection<GenericCombinedData<RoguelikeBoskySubNodeType>> RoguelikeBoskyPlaytimeSubNodeList { get; } =
     [
         new() { Display = LocalizationHelper.GetString("RoguelikePlaytimeLing"), Value = RoguelikeBoskySubNodeType.Ling },
         new() { Display = LocalizationHelper.GetString("RoguelikePlaytimeShu"), Value = RoguelikeBoskySubNodeType.Shu },
@@ -784,9 +807,9 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
     ];
 
     /// <summary>
-    /// Gets a value indicating whether the FindPlaytime target selection should be visible.
+    /// Gets a value indicating whether the playtime subnode selection should be visible.
     /// </summary>
-    public bool RoguelikeFindPlaytimeTargetVisible => RoguelikeMode == Mode.FindPlaytime && RoguelikeTheme == Theme.JieGarden;
+    public bool RoguelikeBoskyPlaytimeSubNodeVisible => RoguelikeMode == Mode.FindBoskyNode && RoguelikeBoskyNodeTarget == RoguelikeBoskyNodeTarget.FindPlaytime;
 
     /// <summary>
     /// Gets or sets a value indicating whether to stop when max level has been achieved.
@@ -991,11 +1014,18 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
 
             case "RoguelikeJieGardenTargetFound":
                 {
-                    var targetSubtype = subTaskDetails!["target_subtype"]?.ToString();
-                    var localizedTarget = targetSubtype switch {
-                        "Ling" => LocalizationHelper.GetString("RoguelikePlaytimeLing"),
-                        "Shu" => LocalizationHelper.GetString("RoguelikePlaytimeShu"),
-                        "Nian" => LocalizationHelper.GetString("RoguelikePlaytimeNian"),
+                    var targetType = subTaskDetails!["target_type"]?.ToString();
+                    var targetName = subTaskDetails["target_name"]?.ToString();
+                    var targetSubtype = subTaskDetails["target_subtype"]?.ToString();
+
+                    var localizedTarget = targetType switch {
+                        "FindPlaytime" => targetName switch {
+                            "Ling" => LocalizationHelper.GetString("RoguelikePlaytimeLing"),
+                            "Shu" => LocalizationHelper.GetString("RoguelikePlaytimeShu"),
+                            "Nian" => LocalizationHelper.GetString("RoguelikePlaytimeNian"),
+                            _ => targetName ?? targetSubtype ?? "Unknown",
+                        },
+                        "FindSchemeBox" => LocalizationHelper.GetString("RoguelikeSchemeBoxTarget"),
                         _ => targetSubtype ?? "Unknown",
                     };
                     Instances.TaskQueueViewModel.AddLog(LocalizationHelper.GetStringFormat("RoguelikeJieGardenTargetFound", localizedTarget), UiLogColor.Success);
@@ -1094,8 +1124,8 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
                 // 深入探索
                 DeepExplorationAutoIterate = roguelike.DeepExplorationAutoIterate,
 
-                // 刷常乐节点
-                FindPlaytimeTarget = roguelike.FindPlaytimeTarget, // 等待添加到 RoguelikeTask
+                // 刷树洞节点
+                BoskyNodeTarget = roguelike.BoskyNodeTarget, // 等待添加到 RoguelikeTask
 
                 SamiFirstFloorFoldartal = roguelike.Theme == Theme.Sami && roguelike.Mode == Mode.Collectible && roguelike.SamiFirstFloorFoldartal,
                 SamiStartFloorFoldartal = roguelike.SamiFirstFloorFoldartals,

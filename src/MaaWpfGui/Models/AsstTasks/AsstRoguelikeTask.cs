@@ -180,9 +180,9 @@ public class AsstRoguelikeTask : AsstBaseTask
     public bool DeepExplorationAutoIterate { get; set; }
 
     /// <summary>
-    /// Gets or sets FindPlaytime 模式的目标常乐节点子类型
+    /// Gets or sets FindBoskyNode 模式的目标节点类别
     /// </summary>
-    public RoguelikeBoskySubNodeType FindPlaytimeTarget { get; set; } = RoguelikeBoskySubNodeType.Ling;
+    public RoguelikeBoskyNodeTarget BoskyNodeTarget { get; set; } = RoguelikeBoskyNodeTarget.FindPlaytime;
 
     /// <summary>
     /// Gets or sets a value indicating whether 是否在五层BOSS前停下来
@@ -258,9 +258,14 @@ public class AsstRoguelikeTask : AsstBaseTask
             taskParams["deep_exploration_auto_iterate"] = DeepExplorationAutoIterate;
         }
 
-        if (Mode == RoguelikeMode.FindPlaytime)
+        if (Mode == RoguelikeMode.FindBoskyNode)
         {
-            taskParams["find_playTime_target"] = (int)FindPlaytimeTarget;
+            taskParams["find_bosky_node_target"] = BoskyNodeTarget switch
+            {
+                RoguelikeBoskyNodeTarget.FindPlaytime => "FindPlaytime",
+                RoguelikeBoskyNodeTarget.FindSchemeBox => "FindSchemeBox",
+                _ => "FindPlaytime",
+            };
         }
 
         if (SamiFirstFloorFoldartal && SamiStartFloorFoldartal.Length > 0)
