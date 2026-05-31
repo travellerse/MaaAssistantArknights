@@ -79,6 +79,7 @@ public class ConnectSettingsUserControlModel : PropertyChangedBase
             new() { Display = LocalizationHelper.GetString("XYAZ"), Value = "XYAZ" },
             new() { Display = LocalizationHelper.GetString("PC"), Value = "PC" },
             new() { Display = LocalizationHelper.GetString("WSA"), Value = "WSA" },
+            new() { Display = LocalizationHelper.GetString("Waydroid"), Value = "Waydroid" },
             new() { Display = LocalizationHelper.GetString("Compatible"), Value = "Compatible" },
             new() { Display = LocalizationHelper.GetString("SecondResolution"), Value = "SecondResolution" },
             new() { Display = LocalizationHelper.GetString("GeneralWithoutScreencapErr"), Value = "GeneralWithoutScreencapErr" },
@@ -842,6 +843,7 @@ public class ConnectSettingsUserControlModel : PropertyChangedBase
             { "XYAZ", ["127.0.0.1:21503"] },
             { "Androws", ["127.0.0.1:5555"] },
             { "WSA", ["127.0.0.1:58526"] },
+            { "Waydroid", ["192.168.240.112:5555"] },
         };
 
     /// <summary>

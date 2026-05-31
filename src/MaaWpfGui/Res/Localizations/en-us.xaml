@@ -192,6 +192,7 @@ To customize rotation schedules, please use ｢{key=InfrastModeCustom}｣.</syst
     <system:String x:Key="Nox">Nox</system:String>
     <system:String x:Key="XYAZ">MEmu</system:String>
     <system:String x:Key="WSA">Old version of WSA</system:String>
+    <system:String x:Key="Waydroid">Waydroid</system:String>
     <system:String x:Key="PC">PC Client</system:String>
     <system:String x:Key="MaaTouch">MaaTouch</system:String>
     <system:String x:Key="Compatible">Compatible Mode</system:String>
