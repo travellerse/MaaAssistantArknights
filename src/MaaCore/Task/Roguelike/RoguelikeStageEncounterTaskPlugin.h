@@ -37,6 +37,8 @@ private:
     void move_backward();
 
     std::optional<std::string> next_event(const Config::RoguelikeEvent& event);
+    bool is_option_click_successful(const cv::Mat& image) const;
+    bool is_coppers_interface(const cv::Mat& image) const;
 
     static bool save_img(const cv::Mat& image, std::string_view description = "image");
 

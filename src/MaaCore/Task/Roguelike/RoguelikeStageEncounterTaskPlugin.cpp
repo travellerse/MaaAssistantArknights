@@ -228,9 +228,9 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
 
     // 判断是否点击成功，成功进入对话后左上角的生命值会消失
     image = ctrler()->get_image();
-    bool hp_disappeared = (hp(image) < 0);
+    bool option_click_successful = is_option_click_successful(image);
     // fallback 可变选项，临时处理，之后还得改成更通用的方式
-    if (!hp_disappeared) {
+    if (!option_click_successful) {
         for (const auto& [total, item] : event.fallback_choices) {
             Log.info("Trying fallback choice", total, "-", item);
             for (int j = 0; j < 2; ++j) {
@@ -239,15 +239,15 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
             }
             sleep(500);
             image = ctrler()->get_image();
-            if (hp(image) < 0) {
+            if (is_option_click_successful(image)) {
                 Log.info("Fallback choice success");
-                hp_disappeared = true;
+                option_click_successful = true;
                 break;
             }
         }
     }
 
-    if (hp_disappeared) {
+    if (option_click_successful) {
         return next_event(event);
     }
 
@@ -272,7 +272,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
 
             sleep(500);
             image = ctrler()->get_image();
-            if (hp(image) < 0) {
+            if (is_option_click_successful(image)) {
                 return std::nullopt;
             }
         }
@@ -370,6 +370,28 @@ int asst::RoguelikeStageEncounterTaskPlugin::hp(const cv::Mat& image) const
     return utils::chars_to_number(res_vec_opt->text, hp_val) ? hp_val : 0;
 }
 
+bool asst::RoguelikeStageEncounterTaskPlugin::is_option_click_successful(const cv::Mat& image) const
+{
+    if (hp(image) < 0) {
+        return true;
+    }
+    return is_coppers_interface(image);
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::is_coppers_interface(const cv::Mat& image) const
+{
+    if (m_config->get_theme() != RoguelikeTheme::JieGarden) {
+        return false;
+    }
+    Matcher matcher(image);
+    matcher.set_task_info("JieGarden@Roguelike@CoppersTakeFlag");
+    if (matcher.analyze()) {
+        Log.info("Detected CoppersTakeFlag interface");
+        return true;
+    }
+    return false;
+}
+
 bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list()
 {
     LogTraceFunction;
@@ -434,7 +456,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::select_analyzed_option(size_t inde
     }
     sleep(1500);
 
-    if (hp(ctrler()->get_image()) < 0) {
+    if (is_option_click_successful(ctrler()->get_image())) {
         return true;
     }
 
@@ -580,9 +602,9 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::next_event(c
             ctrler()->click(task->specific_rect);
             sleep(500);
         }
-        if (hp(ctrler()->get_image()) >= 0) {
+        cv::Mat image = ctrler()->get_image();
+        if (hp(image) >= 0 && !is_coppers_interface(image)) {
             Log.debug("HP restored, going to next_event:", event.next_event);
-            // 多点一次，确保选项恢复
             ctrler()->click(task->specific_rect);
             sleep(500);
             return event.next_event;
