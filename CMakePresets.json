@@ -236,6 +236,9 @@
                 "publish-base",
                 "linux-x64"
             ],
+            "cacheVariables": {
+                "MAA_LINUX_OCR_BACKEND": "ncnn"
+            },
             "displayName": "Linux x64 Publish"
         },
         {
@@ -244,6 +247,9 @@
                 "publish-base",
                 "linux-arm64"
             ],
+            "cacheVariables": {
+                "MAA_LINUX_OCR_BACKEND": "ncnn"
+            },
             "displayName": "Linux arm64 Publish"
         },
         {

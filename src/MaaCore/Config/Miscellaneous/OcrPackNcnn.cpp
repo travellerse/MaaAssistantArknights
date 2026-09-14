@@ -1,4 +1,4 @@
-#ifdef __ANDROID__
+#if defined(ASST_WITH_NCNN) && ASST_WITH_NCNN
 
 #include "OcrPack.h"
 
@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <mutex>
 #include <ranges>
 #include <thread>
 
@@ -17,15 +18,47 @@
 
 #include <cpu.h>
 
+namespace
+{
+int cpu_thread_count()
+{
+    const int logical = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
+    if (logical <= 2) {
+        return 1;
+    }
+    if (logical <= 4) {
+        return 2;
+    }
+    if (logical <= 12) {
+        return 3;
+    }
+    return 4;
+}
+
+#if ASST_WITH_NCNN_VULKAN_OCR
+constexpr bool k_ncnn_vulkan_ocr_enabled = true;
+#else
+constexpr bool k_ncnn_vulkan_ocr_enabled = false;
+#endif
+
+}
+
 namespace asst
 {
 
 struct OcrPack::Impl
 {
-    std::unique_ptr<OcrPackNcnn> ncnn;
+    std::shared_ptr<OcrPackNcnn> ncnn;
     std::filesystem::path det_model_path;
     std::filesystem::path rec_model_path;
     std::filesystem::path rec_label_path;
+    // 实际生效的后端，仅在 session 加载成功后写入。
+    std::optional<detail::NcnnOcrRuntimeOptions> applied_runtime;
+    // Vulkan 请求失败后的降级标记。只作用于本 pack（WordOcr / CharOcr 各自独立），
+    // 不写任何进程级状态；use_gpu() / use_cpu() / load() 会清除它，
+    // 因此显式重新配置后端或重新加载资源后仍会重试 Vulkan。
+    bool vulkan_downgraded = false;
+    std::mutex mutex;
 };
 
 OcrPack::OcrPack() :
@@ -38,45 +71,95 @@ OcrPack::~OcrPack()
     LogTraceFunction;
 }
 
+bool OcrPack::is_using_gpu()
+{
+    std::lock_guard lock(m_impl->mutex);
+    return m_impl->applied_runtime && m_impl->applied_runtime->backend == detail::NcnnOcrBackend::Vulkan;
+}
+
 bool OcrPack::load(const std::filesystem::path& path)
 {
     LogTraceFunction;
     Log.info("load", path.lexically_relative(UserDir.get()));
 
+    std::lock_guard lock(m_impl->mutex);
+
     using namespace asst::utils::path_literals;
 
     const auto det_dir = path / "det"_p;
     const auto det_model_file = det_dir / "det.ncnn.param"_p;
+    const auto det_bin_file = det_dir / "det.ncnn.bin"_p;
     const auto rec_dir = path / "rec"_p;
     const auto rec_model_file = rec_dir / "rec.ncnn.param"_p;
+    const auto rec_bin_file = rec_dir / "rec.ncnn.bin"_p;
     const auto rec_label_file = rec_dir / "keys.txt"_p;
 
-    if (std::filesystem::exists(det_model_file) && m_impl->det_model_path != det_model_file) {
-        m_impl->det_model_path = det_model_file;
+    const bool complete = std::filesystem::exists(det_model_file) && std::filesystem::exists(det_bin_file) &&
+                          std::filesystem::exists(rec_model_file) && std::filesystem::exists(rec_bin_file) &&
+                          std::filesystem::exists(rec_label_file);
+    if (!complete) {
+        m_impl->det_model_path.clear();
+        m_impl->rec_model_path.clear();
+        m_impl->rec_label_path.clear();
         m_impl->ncnn = nullptr;
-    }
-    if (std::filesystem::exists(rec_model_file) && m_impl->rec_model_path != rec_model_file) {
-        m_impl->rec_model_path = rec_model_file;
-        m_impl->ncnn = nullptr;
-    }
-    if (std::filesystem::exists(rec_label_file) && m_impl->rec_label_path != rec_label_file) {
-        m_impl->rec_label_path = rec_label_file;
-        m_impl->ncnn = nullptr;
+        m_impl->applied_runtime.reset();
+        m_impl->vulkan_downgraded = false;
+        return false;
     }
 
-    return !m_impl->det_model_path.empty() && !m_impl->rec_model_path.empty() && !m_impl->rec_label_path.empty();
+    if (m_impl->det_model_path != det_model_file || m_impl->rec_model_path != rec_model_file ||
+        m_impl->rec_label_path != rec_label_file) {
+        m_impl->det_model_path = det_model_file;
+        m_impl->rec_model_path = rec_model_file;
+        m_impl->rec_label_path = rec_label_file;
+        m_impl->ncnn = nullptr;
+        m_impl->applied_runtime.reset();
+    }
+    m_impl->vulkan_downgraded = false;
+    return true;
 }
 
 OcrPack::ResultsVec OcrPack::recognize(const cv::Mat& image, bool without_det, const std::optional<Rect>& base_roi)
 {
-    if (!check_and_load()) {
-        Log.error(__FUNCTION__, "check_and_load failed");
-        return {};
-    }
-
     auto start_time = std::chrono::steady_clock::now();
 
-    auto raw_results = m_impl->ncnn->recognize(image, without_det);
+    std::optional<int> requested_gpu;
+    {
+        std::lock_guard lock(m_impl->mutex);
+        if (!m_impl->vulkan_downgraded) {
+            requested_gpu = m_gpu_selector ? m_gpu_selector->resolve_device_id() : std::nullopt;
+        }
+    }
+    const auto requested_runtime =
+        detail::select_ncnn_ocr_runtime(requested_gpu, cpu_thread_count(), k_ncnn_vulkan_ocr_enabled);
+
+    auto run = [this, &image, without_det](const detail::NcnnOcrRuntimeOptions& runtime) {
+        auto session = ensure_session(runtime);
+        if (!session) {
+            return std::optional<ResultsVec> {};
+        }
+        return session->recognize(image, without_det);
+    };
+
+    auto result = run(requested_runtime);
+    if (!result && requested_runtime.backend == detail::NcnnOcrBackend::Vulkan) {
+        // Vulkan 失败只降级本 pack：不写进程级状态，另一个 OcrPack 仍会各自尝试 Vulkan。
+        // 降级标记让后续 recognize() 直接走 CPU，避免每次调用都重新初始化 Vulkan。
+        Log.warn(
+            "NCNN Vulkan OCR failed, falling back to CPU for this OCR pack",
+            "device",
+            requested_runtime.device_id);
+        {
+            std::lock_guard lock(m_impl->mutex);
+            m_impl->vulkan_downgraded = true;
+        }
+        result = run(detail::ncnn_ocr_cpu_fallback(requested_runtime));
+    }
+    if (!result) {
+        Log.error(__FUNCTION__, "NCNN OCR inference failed");
+        return {};
+    }
+    auto raw_results = std::move(*result);
 
     auto costs =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count();
@@ -86,7 +169,7 @@ OcrPack::ResultsVec OcrPack::recognize(const cv::Mat& image, bool without_det, c
     }
     else {
         std::string output = "[";
-        for (size_t i = 0; i < raw_results.size(); ++i) {
+        for (size_t i = 0; i != raw_results.size(); ++i) {
             if (i != 0) {
                 output += ", ";
             }
@@ -107,41 +190,55 @@ OcrPack::ResultsVec OcrPack::recognize(const cv::Mat& image, bool without_det, c
     return raw_results;
 }
 
-bool OcrPack::check_and_load()
+std::shared_ptr<OcrPackNcnn> OcrPack::ensure_session(const detail::NcnnOcrRuntimeOptions& runtime)
 {
-    if (m_impl->ncnn && m_impl->ncnn->initialized()) {
-        return true;
+    // 模型加载（文件 IO + ncnn/Vulkan 初始化）必须在配置锁内完成：session 的发布与
+    // use_gpu() / use_cpu() / load() 的配置变更必须原子，否则会在配置已经变化之后
+    // 发布一个过期后端的 session。代价是并发的 recognize() 只在首次加载时排队；
+    // 稳态推理由 OcrPackNcnn::m_inference_mutex 串行化，不经过这把锁。
+    std::lock_guard lock(m_impl->mutex);
+    if (m_impl->ncnn && m_impl->ncnn->initialized() && m_impl->applied_runtime == runtime) {
+        return m_impl->ncnn;
     }
 
     LogTraceFunction;
 
-    int logical = std::max(1u, std::thread::hardware_concurrency());
-    int cpu_threads;
-    if (logical <= 2) {
-        cpu_threads = 1;
+#ifdef __ANDROID__
+    {
+        // ncnn 的 powersave 是进程级执行策略：它设置调用线程的 CPU 亲和性并改写全局
+        // OpenMP 线程数，影响本进程内所有 ncnn 使用者（其他 OCR pack、其他 ncnn 模型）。
+        // 这里在首次加载 session 前设置一次，语义等价于"本进程的 ncnn 一律绑大核"。
+        static std::mutex cpu_runtime_mutex;
+        std::scoped_lock cpu_lock(cpu_runtime_mutex);
+        ncnn::set_cpu_powersave(2);
     }
-    else if (logical <= 4) {
-        cpu_threads = 2;
-    }
-    else if (logical <= 12) {
-        cpu_threads = 3;
-    }
-    else {
-        cpu_threads = 4;
-    }
+#endif
 
-    ncnn::set_cpu_powersave(2); // Android big.LITTLE：绑定大核
-
-    m_impl->ncnn = std::make_unique<OcrPackNcnn>();
-    m_impl->ncnn->set_cpu_threads(cpu_threads);
+    m_impl->ncnn = nullptr;
+    m_impl->applied_runtime.reset();
+    auto session = std::make_shared<OcrPackNcnn>();
+    session->set_cpu_threads(runtime.cpu_threads);
+    session->set_runtime(runtime);
 
     const auto det_bin = std::filesystem::path(m_impl->det_model_path).replace_extension("bin");
     const auto rec_bin = std::filesystem::path(m_impl->rec_model_path).replace_extension("bin");
-    bool ok =
-        m_impl->ncnn->load(m_impl->det_model_path, det_bin, m_impl->rec_model_path, rec_bin, m_impl->rec_label_path);
+    const bool ok =
+        session->load(m_impl->det_model_path, det_bin, m_impl->rec_model_path, rec_bin, m_impl->rec_label_path);
 
-    Log.info("ncnn ocr inited", ok);
-    return ok;
+    Log.info(
+        "ncnn ocr inited",
+        ok,
+        "backend",
+        runtime.backend == detail::NcnnOcrBackend::Vulkan ? "Vulkan" : "CPU",
+        "device",
+        runtime.device_id);
+    if (!ok) {
+        return nullptr;
+    }
+
+    m_impl->ncnn = std::move(session);
+    m_impl->applied_runtime = runtime;
+    return m_impl->ncnn;
 }
 
 } // namespace asst
@@ -155,8 +252,87 @@ bool OcrPack::check_and_load()
 #include <utility>
 
 #include <ncnn/net.h>
+#if ASST_WITH_NCNN_VULKAN_OCR && NCNN_VULKAN
+#include <ncnn/gpu.h>
+#endif
 
 #include <polyclipping/clipper.hpp>
+
+#if ASST_WITH_NCNN_VULKAN_OCR
+namespace asst::detail
+{
+// NCNN's Vulkan instance is process-wide. NCNN registers its own exit handler
+// after create_gpu_instance(), so this context intentionally does not destroy it.
+class NcnnVulkanContext
+{
+public:
+    bool initialize();
+    int gpu_count();
+    const char* device_name(int device_id);
+
+private:
+    std::once_flag m_once;
+    bool m_initialized = false;
+};
+
+bool NcnnVulkanContext::initialize()
+{
+#if NCNN_VULKAN
+    std::call_once(m_once, [this] { m_initialized = ncnn::create_gpu_instance() == 0; });
+    return m_initialized;
+#else
+    return false;
+#endif
+}
+
+int NcnnVulkanContext::gpu_count()
+{
+#if NCNN_VULKAN
+    return initialize() ? ncnn::get_gpu_count() : 0;
+#else
+    return 0;
+#endif
+}
+
+const char* NcnnVulkanContext::device_name(int device_id)
+{
+#if NCNN_VULKAN
+    return initialize() ? ncnn::get_gpu_info(device_id).device_name() : "";
+#else
+    (void)device_id;
+    return "";
+#endif
+}
+
+NcnnVulkanContext& ncnn_vulkan_context()
+{
+    static NcnnVulkanContext context;
+    return context;
+}
+}
+
+#endif
+
+void asst::OcrPack::use_cpu()
+{
+    std::lock_guard lock(m_impl->mutex);
+    m_gpu_selector = std::nullopt;
+    m_gpu_active = false;
+    m_impl->ncnn = nullptr;
+    m_impl->applied_runtime.reset();
+    m_impl->vulkan_downgraded = false;
+}
+
+void asst::OcrPack::use_gpu(asst::GpuDeviceSelector selector)
+{
+    // 只记录请求，不在这里校验设备：真正的后端解析与可用性验证发生在
+    // ensure_session()（加载模型）与 recognize()（推理）阶段。
+    std::lock_guard lock(m_impl->mutex);
+    m_gpu_selector = std::move(selector);
+    m_impl->ncnn = nullptr;
+    m_impl->applied_runtime.reset();
+    m_impl->vulkan_downgraded = false;
+}
 
 namespace
 {
@@ -270,16 +446,51 @@ bool asst::OcrPackNcnn::load(
 {
     LogTraceFunction;
 
+    m_loaded = false;
+    m_rec.reset();
+    m_det.reset();
+#if ASST_WITH_NCNN_VULKAN_OCR
+    if (m_runtime.backend == detail::NcnnOcrBackend::Vulkan) {
+        auto& context = detail::ncnn_vulkan_context();
+        if (!context.initialize()) {
+            Log.error("OcrPackNcnn failed to initialize Vulkan");
+            return false;
+        }
+        if (!detail::is_valid_ncnn_vulkan_device(m_runtime.device_id, context.gpu_count())) {
+            Log.error("OcrPackNcnn invalid Vulkan device", m_runtime.device_id, "gpu_count", context.gpu_count());
+            return false;
+        }
+        Log.info("OcrPackNcnn Vulkan device", m_runtime.device_id, context.device_name(m_runtime.device_id));
+    }
+#endif
     auto make_net =
         [this](const std::filesystem::path& param, const std::filesystem::path& bin) -> std::unique_ptr<ncnn::Net> {
         auto net = std::make_unique<ncnn::Net>();
-        net->opt.use_vulkan_compute = false;
+#if ASST_WITH_NCNN_VULKAN_OCR
+        const bool use_vulkan = m_runtime.backend == detail::NcnnOcrBackend::Vulkan;
+#else
+        constexpr bool use_vulkan = false;
+#endif
+        net->opt.use_vulkan_compute = use_vulkan;
         net->opt.num_threads = m_cpu_threads;
         net->opt.use_fp16_packed = false;
         net->opt.use_fp16_storage = false;
         net->opt.use_fp16_arithmetic = false;
+#if ASST_WITH_NCNN_VULKAN_OCR && NCNN_VULKAN
+        if (use_vulkan) {
+            net->set_vulkan_device(m_runtime.device_id);
+        }
+#elif ASST_WITH_NCNN_VULKAN_OCR
+        if (use_vulkan) {
+            return nullptr;
+        }
+#endif
         if (net->load_param(platform::path_to_utf8_string(param).c_str()) != 0) {
             Log.error("OcrPackNcnn load_param failed:", param);
+            return nullptr;
+        }
+        if (!detail::is_ncnn_ocr_runtime_applied(m_runtime, net->opt.use_vulkan_compute)) {
+            Log.error("OcrPackNcnn Vulkan initialization failed:", param);
             return nullptr;
         }
         if (net->load_model(platform::path_to_utf8_string(bin).c_str()) != 0) {
@@ -326,9 +537,13 @@ bool asst::OcrPackNcnn::load(
         ncnn::Mat dummy(kRecImgW, kRecImgH, 3);
         dummy.fill(0.f);
         ncnn::Extractor ex = m_rec->create_extractor();
-        ex.input("in0", dummy);
+        if (ex.input("in0", dummy) != 0) {
+            Log.error("OcrPackNcnn rec probe input failed");
+            m_loaded = false;
+            return false;
+        }
         ncnn::Mat out;
-        if (ex.extract("out0", out) != 0) {
+        if (ex.extract("out0", out) != 0 || out.empty() || out.w <= 0 || out.h <= 0) {
             Log.error("OcrPackNcnn rec probe extract failed");
             m_loaded = false;
             return false;
@@ -364,11 +579,19 @@ bool asst::OcrPackNcnn::load(
     }
 
     m_loaded = true;
-    Log.info("OcrPackNcnn loaded, num_classes", num_classes, "charset", m_charset.size(), "threads", m_cpu_threads);
+    Log.info(
+        "OcrPackNcnn loaded, num_classes",
+        num_classes,
+        "charset",
+        m_charset.size(),
+        "threads",
+        m_cpu_threads,
+        "backend",
+        m_runtime.backend == detail::NcnnOcrBackend::Vulkan ? "Vulkan" : "CPU");
     return true;
 }
 
-std::vector<asst::OcrPackNcnn::DetBox> asst::OcrPackNcnn::detect(const cv::Mat& image) const
+std::optional<std::vector<asst::OcrPackNcnn::DetBox>> asst::OcrPackNcnn::detect(const cv::Mat& image) const
 {
     const int src_h = image.rows;
     const int src_w = image.cols;
@@ -397,10 +620,13 @@ std::vector<asst::OcrPackNcnn::DetBox> asst::OcrPackNcnn::detect(const cv::Mat& 
     ncnn::Mat out;
     {
         ncnn::Extractor ex = m_det->create_extractor();
-        ex.input("in0", in);
-        if (ex.extract("out0", out) != 0) {
+        if (ex.input("in0", in) != 0) {
+            Log.error("OcrPackNcnn det input failed");
+            return std::nullopt;
+        }
+        if (ex.extract("out0", out) != 0 || out.empty() || out.c <= 0) {
             Log.error("OcrPackNcnn det extract failed");
-            return {};
+            return std::nullopt;
         }
     }
     ncnn::Mat plane = out.channel(0);
@@ -524,11 +750,11 @@ cv::Mat asst::OcrPackNcnn::crop_rotated(const cv::Mat& image, const DetBox& box)
     return crop;
 }
 
-std::pair<std::string, float> asst::OcrPackNcnn::recognize_line(const cv::Mat& line_in) const
+std::optional<std::pair<std::string, float>> asst::OcrPackNcnn::recognize_line(const cv::Mat& line_in) const
 {
     cv::Mat line = ensure_continuous_bgr(line_in);
     if (line.empty()) {
-        return { std::string(), 0.f };
+        return std::pair { std::string(), 0.f };
     }
 
     const float r = line.rows > 0 ? static_cast<float>(line.cols) / line.rows : 1.f;
@@ -547,10 +773,13 @@ std::pair<std::string, float> asst::OcrPackNcnn::recognize_line(const cv::Mat& l
     ncnn::Mat out;
     {
         ncnn::Extractor ex = m_rec->create_extractor();
-        ex.input("in0", in);
-        if (ex.extract("out0", out) != 0) {
+        if (ex.input("in0", in) != 0) {
+            Log.error("OcrPackNcnn rec input failed");
+            return std::nullopt;
+        }
+        if (ex.extract("out0", out) != 0 || out.empty() || out.w <= 0 || out.h <= 0) {
             Log.error("OcrPackNcnn rec extract failed");
-            return { std::string(), 0.f };
+            return std::nullopt;
         }
     }
     const int T = out.h;
@@ -592,37 +821,58 @@ std::pair<std::string, float> asst::OcrPackNcnn::recognize_line(const cv::Mat& l
     }
 
     const float mean_conf = conf_cnt > 0 ? conf_sum / conf_cnt : 0.f;
-    return { std::move(text), mean_conf };
+    return std::pair { std::move(text), mean_conf };
 }
 
-asst::OcrPackNcnn::ResultsVec asst::OcrPackNcnn::recognize(const cv::Mat& image_in, bool without_det)
+std::optional<asst::OcrPackNcnn::ResultsVec> asst::OcrPackNcnn::recognize(const cv::Mat& image_in, bool without_det)
 {
     if (!m_loaded) {
-        return {};
+        return std::nullopt;
     }
+
+    std::lock_guard inference_lock(m_inference_mutex);
+
     cv::Mat image = ensure_continuous_bgr(image_in);
+    if (image.empty()) {
+        return ResultsVec {};
+    }
 
     ResultsVec results;
 
     if (without_det) {
-        auto [text, score] = recognize_line(image);
+        auto line = recognize_line(image);
+        if (!line) {
+            return std::nullopt;
+        }
+        auto [text, score] = std::move(*line);
         results.emplace_back(Rect(0, 0, image.cols, image.rows), score, std::move(text));
         return results;
     }
 
-    const std::vector<DetBox> boxes = detect(image);
-    if (boxes.empty()) {
+    auto boxes = detect(image);
+    if (!boxes) {
+        return std::nullopt;
+    }
+    if (boxes->empty()) {
         // 对齐 fastdeploy PPOCRv2/v3 det 无框时整图当一行送 rec 小 roi 不处理直接就爆了
-        auto [text, score] = recognize_line(image);
+        auto line = recognize_line(image);
+        if (!line) {
+            return std::nullopt;
+        }
+        auto [text, score] = std::move(*line);
         results.emplace_back(Rect(0, 0, image.cols, image.rows), score, std::move(text));
         return results;
     }
-    for (const auto& box : boxes) {
+    for (const auto& box : *boxes) {
         cv::Mat crop = crop_rotated(image, box);
         if (crop.empty()) {
             continue;
         }
-        auto [text, score] = recognize_line(crop);
+        auto line = recognize_line(crop);
+        if (!line) {
+            return std::nullopt;
+        }
+        auto [text, score] = std::move(*line);
         const float xs[4] = { box.pts[0].x, box.pts[1].x, box.pts[2].x, box.pts[3].x };
         const float ys[4] = { box.pts[0].y, box.pts[1].y, box.pts[2].y, box.pts[3].y };
         const int left = static_cast<int>(*std::min_element(xs, xs + 4));
@@ -634,4 +884,4 @@ asst::OcrPackNcnn::ResultsVec asst::OcrPackNcnn::recognize(const cv::Mat& image_
     return results;
 }
 
-#endif // __ANDROID__
+#endif // ASST_WITH_NCNN

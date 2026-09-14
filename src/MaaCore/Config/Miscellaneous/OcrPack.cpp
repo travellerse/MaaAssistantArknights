@@ -38,6 +38,24 @@ OcrPack::OcrPack() :
 {
 }
 
+bool OcrPack::is_using_gpu()
+{
+    return m_gpu_active;
+}
+
+void OcrPack::use_cpu()
+{
+    m_gpu_selector = std::nullopt;
+    m_gpu_active = false;
+}
+
+void OcrPack::use_gpu(GpuDeviceSelector selector)
+{
+    // 只记录请求：设备可用性由 check_and_load() 创建 pipeline 时解析，
+    // 解析失败会退回 CPU 并记日志。
+    m_gpu_selector = std::move(selector);
+}
+
 OcrPack::~OcrPack()
 {
     LogTraceFunction;
@@ -67,20 +85,33 @@ bool OcrPack::load(const std::filesystem::path& path)
     const auto rec_model_file = rec_dir / "inference.onnx"_p;
     const auto rec_label_file = rec_dir / "keys.txt"_p;
 
-    if (std::filesystem::exists(rec_model_file) && m_impl->rec_model_path != rec_model_file) {
-        m_impl->rec_model_path = rec_model_file;
-        m_impl->rec = nullptr;
+    const bool complete = std::filesystem::exists(det_model_file) && std::filesystem::exists(rec_model_file) &&
+                          std::filesystem::exists(rec_label_file);
+    if (!complete) {
+        m_impl->det_model_path.clear();
+        m_impl->rec_model_path.clear();
+        m_impl->rec_label_path.clear();
+        m_impl->det.reset();
+        m_impl->rec.reset();
+        m_impl->ocr.reset();
+        return false;
     }
-    if (std::filesystem::exists(rec_label_file) && m_impl->rec_label_path != rec_label_file) {
+
+    if (m_impl->det_model_path != det_model_file || m_impl->rec_model_path != rec_model_file ||
+        m_impl->rec_label_path != rec_label_file) {
+        m_impl->det_model_path = det_model_file;
+        m_impl->rec_model_path = rec_model_file;
         m_impl->rec_label_path = rec_label_file;
-        m_impl->rec = nullptr;
+        m_impl->det.reset();
+        m_impl->rec.reset();
+        m_impl->ocr.reset();
     }
 
     if (m_impl->det && m_impl->rec) {
         m_impl->ocr = std::make_unique<fastdeploy::pipeline::PPOCRv3>(m_impl->det.get(), m_impl->rec.get());
     }
 
-    return !m_impl->det_model_path.empty() && !m_impl->rec_model_path.empty() && !m_impl->rec_label_path.empty();
+    return true;
 }
 
 OcrPack::ResultsVec OcrPack::recognize(const cv::Mat& image, bool without_det, const std::optional<Rect>& base_roi)

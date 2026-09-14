@@ -28,6 +28,7 @@ include(Catch)
 
 add_executable(maa-algorithm-test
     MaaCore/AlgorithmTest.cpp
+    MaaCore/OcrBackendTest.cpp
 )
 
 target_compile_features(maa-algorithm-test PRIVATE cxx_std_20)

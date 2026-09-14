@@ -1,7 +1,23 @@
 file(GLOB_RECURSE maa_src *.h *.hpp *.cpp)
 
-# Exclude the platform-specific OCR implementation that is not needed on this target
+# Linux 上可选 OCR 后端：fastdeploy（默认，CPU）或 ncnn（Vulkan/CPU）。
+# Windows/macOS 固定 fastdeploy，Android 固定 ncnn。
 if(ANDROID)
+    set(MAA_USE_NCNN_OCR ON)
+elseif(LINUX)
+    if(MAA_LINUX_OCR_BACKEND STREQUAL "fastdeploy")
+        set(MAA_USE_NCNN_OCR OFF)
+    elseif(MAA_LINUX_OCR_BACKEND STREQUAL "ncnn")
+        set(MAA_USE_NCNN_OCR ON)
+    else()
+        message(FATAL_ERROR "MAA_LINUX_OCR_BACKEND must be 'ncnn' or 'fastdeploy', got '${MAA_LINUX_OCR_BACKEND}'")
+    endif()
+else()
+    set(MAA_USE_NCNN_OCR OFF)
+endif()
+
+# Exclude the platform-specific OCR implementation that is not needed on this target
+if(MAA_USE_NCNN_OCR)
     list(FILTER maa_src EXCLUDE REGEX "OcrPack\\.cpp$")
 else()
     list(FILTER maa_src EXCLUDE REGEX "OcrPackNcnn\\.cpp$")
@@ -33,9 +49,18 @@ target_compile_definitions(MaaCore PRIVATE ASST_WITH_MAC_SCK=$<BOOL:${WITH_MAC_S
 
 target_include_directories(MaaCore PUBLIC ${PROJECT_SOURCE_DIR}/include PRIVATE .)
 add_dependencies(MaaCore MaaUtils)
-if(ANDROID)
+if(MAA_USE_NCNN_OCR)
+    target_compile_definitions(MaaCore PRIVATE ASST_WITH_NCNN=1)
+    if(LINUX AND NOT ANDROID)
+        target_compile_definitions(MaaCore PRIVATE ASST_WITH_NCNN_VULKAN_OCR=1)
+    else()
+        target_compile_definitions(MaaCore PRIVATE ASST_WITH_NCNN_VULKAN_OCR=0)
+    endif()
     find_package(ncnn REQUIRED)
     find_package(polyclipping CONFIG REQUIRED)
+    if(LINUX AND NOT ANDROID AND NOT NCNN_VULKAN)
+        message(FATAL_ERROR "Linux NCNN OCR requires an ncnn package built with Vulkan support")
+    endif()
     target_link_libraries(MaaCore
         HeaderOnlyLibraries MaaUtils ${OpenCV_LIBS}
         ncnn
@@ -44,6 +69,7 @@ if(ANDROID)
     set_property(TARGET MaaCore PROPERTY NO_SYSTEM_FROM_IMPORTED TRUE)
     target_compile_options(MaaCore PRIVATE -Wno-c11-extensions)
 else()
+    target_compile_definitions(MaaCore PRIVATE ASST_WITH_NCNN=0 ASST_WITH_NCNN_VULKAN_OCR=0)
     target_link_libraries(MaaCore HeaderOnlyLibraries MaaUtils ${OpenCV_LIBS} fastdeploy_ppocr ONNXRuntime::ONNXRuntime ZLIB::ZLIB Boost::system)
 endif()
 
