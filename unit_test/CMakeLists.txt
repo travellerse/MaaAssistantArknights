@@ -26,13 +26,23 @@ FetchContent_MakeAvailable(Catch2)
 
 include(Catch)
 
+find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+
 add_executable(maa-algorithm-test
     MaaCore/AlgorithmTest.cpp
+    MaaCore/MaskedMatcherTest.cpp
     MaaCore/OcrBackendTest.cpp
+    # MaskedCcoeffMatcher 只依赖 OpenCV 与 MaaCore 头文件，直接编进测试目标，
+    # 避免为了跑它而链接整个 MaaCore。
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore/Vision/MaskedCcoeffMatcher.cpp
 )
 
 target_compile_features(maa-algorithm-test PRIVATE cxx_std_20)
-target_link_libraries(maa-algorithm-test PRIVATE Catch2::Catch2WithMain)
-target_include_directories(maa-algorithm-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore)
+target_link_libraries(maa-algorithm-test PRIVATE Catch2::Catch2WithMain ${OpenCV_LIBS})
+target_include_directories(maa-algorithm-test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaUtils/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../3rdparty/include
+)
 
 catch_discover_tests(maa-algorithm-test TEST_PREFIX "algorithm::")
