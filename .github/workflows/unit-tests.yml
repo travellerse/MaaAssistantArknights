@@ -1,24 +1,38 @@
 name: Unit Tests
 
 on:
-  # push:
-  #   branches:
-  #     - "dev-v2"
-  #   paths:
-  #     - ".github/workflows/unit-tests.yml"
-  #     - "unit_test/**"
-  #     - "src/**"
-  # pull_request:
-  #   paths:
-  #     - ".github/workflows/unit-tests.yml"
-  #     - "unit_test/**"
-  #     - "src/**"
+  push:
+    branches:
+      - "dev-v2"
+    paths:
+      - ".github/workflows/unit-tests.yml"
+      - "unit_test/**"
+      - "src/**"
+      - "tools/ConvertOcrNcnn/**"
+  pull_request:
+    paths:
+      - ".github/workflows/unit-tests.yml"
+      - "unit_test/**"
+      - "src/**"
+      - "tools/ConvertOcrNcnn/**"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  ocr-ncnn-tools:
+    name: NCNN OCR conversion tool tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          show-progress: false
+
+      - name: Run conversion tool tests
+        run: python3 -m unittest unit_test/Tools/test_convert_ocr_ncnn.py -v
+
   select-tests:
     name: Select Unit Test Suites
     runs-on: ubuntu-latest
@@ -109,9 +123,22 @@ jobs:
         with:
           show-progress: false
 
+      - name: Set up ccache
+        uses: Chocobo1/setup-ccache-action@802ec72ba1d54bbf75c52f45367253d6abec30f5 # v1.5.8
+        with:
+          remove_stale_cache: false
+
+      - name: Install OpenCV
+        # MaskedMatcherTest 用 OpenCV 的 cv::dft / cv::Mat 做暴力参考实现，需要 core + imgproc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libopencv-dev
+
       - name: Configure unit tests
         run: |
-          cmake -S unit_test -B build/unit_test -DCMAKE_BUILD_TYPE=Release
+          cmake -S unit_test -B build/unit_test \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build selected unit test target
         run: |

@@ -14,7 +14,9 @@ on:
       - "CMakePresets.json"
       - "include/**"
       - "src/**"
+      - "tools/ConvertOcrNcnn/**"
       - "tools/maadeps-download.py"
+      - "unit_test/Tools/test_convert_ocr_ncnn.py"
       - "!**/*.md"
   pull_request:
     paths:
@@ -25,7 +27,9 @@ on:
       - "CMakePresets.json"
       - "include/**"
       - "src/**"
+      - "tools/ConvertOcrNcnn/**"
       - "tools/maadeps-download.py"
+      - "unit_test/Tools/test_convert_ocr_ncnn.py"
       - "!**/*.md"
   workflow_dispatch:
 
@@ -279,6 +283,28 @@ jobs:
         shell: bash
         run: bash ./.github/scripts/sync-optional-submodules.sh --init --depth 1 src/MaaUtils 3rdparty/EmulatorExtras src/maa-cli
 
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: tools/ConvertOcrNcnn/requirements.txt
+
+      - name: Install NCNN OCR conversion tools
+        run: python3 -m pip install --no-deps --require-hashes -r tools/ConvertOcrNcnn/requirements.txt
+
+      - name: Cache converted NCNN OCR models
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/maa/ncnn-ocr
+          key: ncnn-ocr-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('resource/**/inference.onnx', 'tools/ConvertOcrNcnn/**') }}
+
+      - name: Set up ccache
+        uses: Chocobo1/setup-ccache-action@802ec72ba1d54bbf75c52f45367253d6abec30f5 # v1.5.8
+        with:
+          override_cache_key: ccache-${{ runner.os }}-${{ matrix.arch }}
+          remove_stale_cache: false
+
       - name: Cache MaaDeps
         id: cache-maadeps
         uses: actions/cache@v6
@@ -296,11 +322,22 @@ jobs:
 
       - name: Configure, build and install
         run: |
-          cmake --preset ${{ matrix.arch == 'x86_64' && 'linux-publish-x64' || 'linux-publish-arm64' }} -DMAA_HASH_VERSION='${{ needs.meta.outputs.tag }}'
+          cmake --preset ${{ matrix.arch == 'x86_64' && 'linux-publish-x64' || 'linux-publish-arm64' }} \
+            -DMAA_HASH_VERSION='${{ needs.meta.outputs.tag }}' \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           cmake --build --preset ${{ matrix.arch == 'x86_64' && 'linux-publish-x64' || 'linux-publish-arm64' }} --parallel $(nproc)
           cmake --install build --config RelWithDebInfo
         env:
           CLICOLOR_FORCE: 1
+
+      - name: Convert and verify NCNN OCR resources
+        run: |
+          python3 tools/ConvertOcrNcnn/convert_ocr_ncnn.py \
+            --resource install/resource \
+            --cache ~/.cache/maa/ncnn-ocr \
+            --remove-onnx
+          python3 tools/ConvertOcrNcnn/verify_manifest.py --resource install/resource
 
       - name: Download MaaFramework
         uses: robinraju/release-downloader@v1

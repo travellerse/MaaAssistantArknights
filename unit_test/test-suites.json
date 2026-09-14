@@ -2,7 +2,10 @@
   "runAllOnChanges": [
     "unit_test/CMakeLists.txt",
     "unit_test/test-suites.json",
-    ".github/workflows/unit-tests.yml"
+    ".github/workflows/unit-tests.yml",
+    "CMakeLists.txt",
+    "CMakePresets.json",
+    "src/Cpp/CMakeLists.txt"
   ],
   "suites": [
     {
@@ -11,8 +14,21 @@
       "buildTarget": "maa-algorithm-test",
       "ctestRegex": "^algorithm::",
       "paths": [
+        "src/MaaCore/Common/AsstBattleDef.h",
+        "src/MaaCore/Common/OperNameTag.h",
         "src/MaaCore/Utils/Algorithm.hpp",
-        "unit_test/MaaCore/AlgorithmTest.cpp"
+        "src/MaaCore/Assistant.cpp",
+        "src/MaaCore/CMakeLists.txt",
+        "src/MaaCore/Config/Miscellaneous/OcrPack.cpp",
+        "src/MaaCore/Config/Miscellaneous/OcrPack.h",
+        "src/MaaCore/Config/Miscellaneous/OcrPackNcnn.cpp",
+        "src/MaaCore/Config/Miscellaneous/OcrPackNcnn.h",
+        "src/MaaCore/Config/Miscellaneous/OcrPackNcnnRuntime.h",
+        "src/MaaCore/Vision/MaskedCcoeffMatcher.cpp",
+        "src/MaaCore/Vision/MaskedCcoeffMatcher.h",
+        "unit_test/MaaCore/AlgorithmTest.cpp",
+        "unit_test/MaaCore/MaskedMatcherTest.cpp",
+        "unit_test/MaaCore/OcrBackendTest.cpp"
       ]
     }
   ]
