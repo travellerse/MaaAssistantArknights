@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <limits>
 #include <optional>
 #include <string>
@@ -7,6 +8,8 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+#include "Common/OperNameTag.h"
 
 namespace asst::algorithm
 {
