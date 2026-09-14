@@ -108,6 +108,9 @@ std::vector<Matcher::RawResult> Matcher::preproc_and_match(const cv::Mat& image,
     }
 
     cv::Mat image_hsv;
+    // image_match 在本函数入口转换后不再变化，因此可以安全地跨模板复用同一份
+    // PreparedImage；新增会改变匹配图像的逻辑时必须同步失效该缓存。
+    std::optional<MaskedCcoeffMatcher::PreparedImage> prepared_match_image;
 
     for (size_t i = 0; i != params.templs.size(); ++i) {
         const auto& ptempl = params.templs[i];
@@ -233,46 +236,30 @@ std::vector<Matcher::RawResult> Matcher::preproc_and_match(const cv::Mat& image,
             }
             // mask_src=false 时 mask 完全由模板决定，用 FFT 路径替代标量滑窗
             if (!params.mask_src) {
+                // 这里只做预判，避免在确定走 OpenCV 时白做一次 prepare_image；
+                // match() 内部会用同一函数重新判断，输入一致所以结论一致。
                 const int mask_pixels = cv::countNonZero(mask_opt.value());
                 if (mask_pixels == mask_opt.value().rows * mask_opt.value().cols) {
                     cv::matchTemplate(image_match, templ_match, matched, match_algorithm);
                 }
-                else if (MaskedCcoeffMatcher::should_fallback_to_opencv(
-                             mask_pixels,
-                             (image_match.rows - templ_match.rows + 1) * (image_match.cols - templ_match.cols + 1))) {
+                else if (
+                    MaskedCcoeffMatcher::choose_strategy(
+                        mask_pixels,
+                        (image_match.rows - templ_match.rows + 1) * (image_match.cols - templ_match.cols + 1)) ==
+                    MaskedCcoeffMatcher::MatchStrategy::OpenCV) {
                     // matched 保持 empty，统一落到下面的 OpenCV masked matchTemplate
                 }
                 else {
                     auto& masked_ccoeff_matcher = MaskedCcoeffMatcher::get_instance();
-                    const uint64_t templ_revision = TemplResource::get_instance().revision();
-                    masked_ccoeff_matcher.sync_cache_revision(templ_revision);
+                    // 模板资源换了 revision 就作废 matcher 的模板/频谱缓存
+                    masked_ccoeff_matcher.sync_cache_revision(TemplResource::get_instance().revision());
 
-                    // cache key：templ_name + mask_ranges
-                    // 资源模板绑定 revision；cv::Mat 模板使用 row-wise 内容 hash
-                    std::string fft_key = templ_name.empty()
-                                              ? MaskedCcoeffMatcher::make_mat_cache_key(templ)
-                                              : "res:" + std::to_string(templ_revision) + ":" + templ_name;
-                    for (const auto& r : params.mask_ranges) {
-                        if (std::holds_alternative<MatchTaskInfo::GrayRange>(r)) {
-                            const auto& g = std::get<MatchTaskInfo::GrayRange>(r);
-                            fft_key += ":G" + std::to_string(g.first) + '_' + std::to_string(g.second);
-                        }
-                        else if (std::holds_alternative<MatchTaskInfo::ColorRange>(r)) {
-                            const auto& col = std::get<MatchTaskInfo::ColorRange>(r);
-                            fft_key += ":C";
-                            for (auto v : col.first) {
-                                fft_key += std::to_string(v) + ',';
-                            }
-                            fft_key += '_';
-                            for (auto v : col.second) {
-                                fft_key += std::to_string(v) + ',';
-                            }
-                        }
+                    if (!prepared_match_image) {
+                        prepared_match_image = masked_ccoeff_matcher.prepare_image(image_match);
                     }
-                    fft_key += params.mask_close ? ":1" : ":0";
-
-                    matched =
-                        masked_ccoeff_matcher.match(image_match, templ_match, mask_opt.value(), fft_key, mask_pixels);
+                    if (prepared_match_image) {
+                        matched = masked_ccoeff_matcher.match(*prepared_match_image, templ_match, mask_opt.value());
+                    }
                     if (!matched.empty()) {
                         match_path = MatchPath::Optimized;
                     }
