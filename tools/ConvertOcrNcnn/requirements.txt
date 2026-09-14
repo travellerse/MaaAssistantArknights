@@ -1,0 +1,8 @@
+# Keep this aligned with PNNX_VERSION in convert_ocr_ncnn.py. Install with
+# --no-deps: the converter invokes the wheel's native binary and does not need
+# the Python Torch/CUDA dependencies pulled by pnnx's optional wrapper API.
+pnnx==20260526 \
+    --hash=sha256:5d82973ab66afed9f2b5059e18494298c936ea209ab2fc9edccc0f8de59e0f35 \
+    --hash=sha256:5c5c72b9973752d175d2d9b3fb388a5f21eaa4fc4cafec36547b8f506c776446 \
+    --hash=sha256:9990d88b77c4fab8fa120fda40ba371c6237a4c5b1134a81e6f1162aa65177bf \
+    --hash=sha256:66f49d67305528c8d7a0c8df41c64a0b9de8fc5254c87200199f481d9caf5695
