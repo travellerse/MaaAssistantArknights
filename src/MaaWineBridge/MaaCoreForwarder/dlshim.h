@@ -11,4 +11,4 @@
 #define FILL_DL_FUNC(lib, func)                       \
     do {                                              \
         dl_##func = (typeof(func)*)dlsym(lib, #func); \
-    } while (0);
+    } while (0)
