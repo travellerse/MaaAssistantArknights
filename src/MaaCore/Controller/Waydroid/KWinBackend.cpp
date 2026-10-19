@@ -8,7 +8,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -45,6 +47,7 @@ const windows = workspace.windowList().map(w => ({
     caption: w.caption,
     resourceClass: w.resourceClass,
     internalId: String(w.internalId),
+    pid: w.pid,
     minimized: w.minimized,
     width: w.frameGeometry.width,
     height: w.frameGeometry.height
@@ -60,12 +63,48 @@ callDBus(")JS";
     return script;
 }
 
-bool is_waydroid_class(const std::string& resource_class, const std::string& selector)
+std::string to_lower(std::string_view text)
 {
-    if (selector.empty()) {
-        return resource_class.starts_with("waydroid.") || resource_class == "waydroid";
+    std::string result(text);
+    std::ranges::transform(result, result.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return result;
+}
+
+bool is_waydroid_pid(int pid)
+{
+    if (pid <= 0) {
+        return false;
     }
-    return resource_class.find(selector) != std::string::npos;
+    std::ifstream file("/proc/" + std::to_string(pid) + "/cgroup");
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.find("waydroid") != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool is_waydroid_window(
+    const std::string& resource_class,
+    const std::string& caption,
+    int pid,
+    const std::string& selector)
+{
+    if (!selector.empty()) {
+        const std::string lower_selector = to_lower(selector);
+        return to_lower(resource_class).find(lower_selector) != std::string::npos ||
+               to_lower(caption).find(lower_selector) != std::string::npos;
+    }
+    const std::string lower_class = to_lower(resource_class);
+    if (lower_class == "waydroid" || lower_class.starts_with("waydroid.")) {
+        return true;
+    }
+    // Full-UI and some app windows do not use the waydroid.* class. The
+    // window's client lives in the Waydroid LXC cgroup, which is stable.
+    return is_waydroid_pid(pid);
 }
 
 struct CaptureGeometry
@@ -295,6 +334,7 @@ bool KWinBackend::select_window(const std::string& report)
         std::string handle;
         std::string caption;
         std::string resource_class;
+        int pid = 0;
         double width = 0;
         double height = 0;
         bool minimized = false;
@@ -310,6 +350,7 @@ bool KWinBackend::select_window(const std::string& report)
         candidate.handle = object.get("internalId", "");
         candidate.caption = object.get("caption", "");
         candidate.resource_class = object.get("resourceClass", "");
+        candidate.pid = object.get("pid", 0);
         candidate.width = object.get("width", 0.0);
         candidate.height = object.get("height", 0.0);
         candidate.minimized = object.get("minimized", false);
@@ -320,7 +361,7 @@ bool KWinBackend::select_window(const std::string& report)
 
     const Candidate* chosen = nullptr;
     for (const auto& candidate : candidates) {
-        if (!is_waydroid_class(candidate.resource_class, m_selector)) {
+        if (!is_waydroid_window(candidate.resource_class, candidate.caption, candidate.pid, m_selector)) {
             continue;
         }
         if (chosen == nullptr || (!candidate.minimized && chosen->minimized) ||
@@ -331,6 +372,10 @@ bool KWinBackend::select_window(const std::string& report)
     }
     if (chosen == nullptr) {
         LogWarn << "KWin capture: no Waydroid window found" << VAR(m_selector);
+        for (const auto& candidate : candidates) {
+            LogDebug << "KWin window candidate" << VAR(candidate.caption) << VAR(candidate.resource_class)
+                     << VAR(candidate.pid) << VAR(candidate.width) << VAR(candidate.height) << VAR(candidate.minimized);
+        }
         return false;
     }
 
