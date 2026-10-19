@@ -17,6 +17,10 @@
 #include "MumuExtras.h"
 #include "Utils/StringMisc.hpp"
 
+#if ASST_WITH_WAYDROID_EXTRAS
+#include "WaydroidExtras.h"
+#endif
+
 namespace asst
 {
 
@@ -162,6 +166,9 @@ protected:
     void init_mumu_extras(const AdbCfg& adb_cfg, const std::string& address);
     void set_mumu_package(const std::string& client_type);
     void init_ld_extras(const AdbCfg& adb_cfg, const std::string& address);
+#if ASST_WITH_WAYDROID_EXTRAS
+    void init_waydroid_extras(const AdbCfg& adb_cfg, const std::string& config);
+#endif
     static std::optional<int> get_ld_index(const std::string& address);
 
     // 转换 data 中的 CRLF 为 LF：有些模拟器自带的 adb，exec-out 输出的 \n 会被替换成 \r\n，
@@ -226,6 +233,9 @@ protected:
             MumuExtras,
             LDExtras,
 #endif
+#if ASST_WITH_WAYDROID_EXTRAS
+            WaydroidExtras,
+#endif
         } screencap_method = ScreencapMethod::UnknownYet;
     } m_adb;
 
@@ -252,6 +262,9 @@ protected:
 #if ASST_WITH_EMULATOR_EXTRAS
     MumuExtras m_mumu_extras;
     LDExtras m_ld_extras;
+#endif
+#if ASST_WITH_WAYDROID_EXTRAS
+    WaydroidExtras m_waydroid_extras;
 #endif
 };
 } // namespace asst
