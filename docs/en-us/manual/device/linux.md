@@ -163,7 +163,7 @@ Waydroid lacks the `/dev/input/eventN` devices necessary for Minitouch, so Minit
 When using the native Linux MaaCore (maa-cli, Python, or MaaWineBridge), MaaCore captures the Waydroid window on the host directly instead of using ADB `screencap`:
 
 - KDE: captures the Waydroid window through KWin `ScreenShot2`, even when the window is occluded or minimized.
-- Other desktops: captures frames through the `xdg-desktop-portal` `ScreenCast` interface. The first use shows a one-time window picker; select the Waydroid window and the choice is saved. Only KDE's portal implementation has been verified so far; others such as GNOME are untested, and MAA falls back to ADB when capture fails. Some portal implementations only support monitor capture; in that case, run Waydroid fullscreen.
+- Other desktops: captures frames through the `xdg-desktop-portal` `ScreenCast` interface. The first use shows a one-time window picker; select the Waydroid window and the choice is saved. Only KDE's portal implementation has been verified so far; others such as GNOME are untested, and MAA falls back to ADB when capture fails. Some portal implementations only support monitor capture; in that case, run Waydroid fullscreen. The first portal connection needs manual confirmation in the system dialog; use `kwin` or `off` for unattended setups.
 - If these backends are unavailable, MAA falls back to ADB screencap automatically; the connection is unaffected.
 
 On the same machine, the KWin path typically takes a few milliseconds and the portal path about ten milliseconds, both well below the tens to hundreds of milliseconds of ADB `screencap`. Actual values depend on the desktop, window refresh state, and system load.

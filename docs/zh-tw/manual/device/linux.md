@@ -163,7 +163,7 @@ Waydroid 沒有 Minitouch 所必需的 `/dev/input/eventN`，無法使用 Minito
 使用 Linux 原生 MaaCore（maa-cli、Python 或 MaaWineBridge）時，MaaCore 會直接擷取宿主上的 Waydroid 視窗，不再透過 ADB `screencap` 取圖：
 
 - KDE：透過 KWin 的 `ScreenShot2` 介面直接擷取 Waydroid 視窗，視窗被遮擋或最小化時仍可擷取。
-- 其他桌面：透過 `xdg-desktop-portal` 的 `ScreenCast` 介面取得畫面。首次使用會彈出一次視窗選擇框，選擇 Waydroid 視窗即可，選擇結果會自動儲存。目前僅在 KDE 的 Portal 實作上驗證過，GNOME 等其他實作尚未驗證，取得畫面失敗時會自動回退到 ADB。部分 Portal 實作只支援螢幕擷取，此時請讓 Waydroid 全螢幕執行。
+- 其他桌面：透過 `xdg-desktop-portal` 的 `ScreenCast` 介面取得畫面。首次使用會彈出一次視窗選擇框，選擇 Waydroid 視窗即可，選擇結果會自動儲存。目前僅在 KDE 的 Portal 實作上驗證過，GNOME 等其他實作尚未驗證，取得畫面失敗時會自動回退到 ADB。部分 Portal 實作只支援螢幕擷取，此時請讓 Waydroid 全螢幕執行。Portal 首次連線需要人工在系統對話框中選擇視窗，無人值守場景請改用 `kwin` 或 `off`。
 - 以上方式無法使用時會自動回退到 ADB 截圖，不影響連線。
 
 在同一台機器上，KWin 路徑的截圖耗時通常為數毫秒，Portal 路徑通常為十餘毫秒，均明顯低於 ADB `screencap` 的數十到上百毫秒；實際數值取決於桌面環境、視窗更新狀態與系統負載。
