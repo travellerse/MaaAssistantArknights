@@ -40,6 +40,9 @@ public:
     // lazily by the first screencap() so that connection setup stays cheap.
     bool init(const json::object& extras, int width, int height);
     void uninit() noexcept;
+    // Turns the enhancement off; used when a reconnect selects a
+    // non-Waydroid config so the previous mode does not leak into it.
+    void disable() noexcept;
     bool reload(int width, int height);
 
     [[nodiscard]] bool enabled() const noexcept { return m_mode != Mode::Off; }

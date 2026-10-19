@@ -84,6 +84,13 @@ void WaydroidExtras::uninit() noexcept
     m_size_warned = false;
 }
 
+void WaydroidExtras::disable() noexcept
+{
+    m_mode = Mode::Off;
+    m_selector.clear();
+    uninit();
+}
+
 bool WaydroidExtras::reload(int width, int height)
 {
     uninit();
