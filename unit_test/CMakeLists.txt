@@ -63,7 +63,7 @@ if(PkgConfig_FOUND)
     endif()
 
     pkg_check_modules(PIPEWIRE QUIET libpipewire-0.3)
-    if(PIPEWIRE_FOUND)
+    if(PIPEWIRE_FOUND AND SPA_FOUND)
         target_compile_definitions(maa-waydroid-test PRIVATE MAA_HAVE_PIPEWIRE_HEADERS=1)
         target_include_directories(maa-waydroid-test PRIVATE ${PIPEWIRE_INCLUDE_DIRS})
     endif()

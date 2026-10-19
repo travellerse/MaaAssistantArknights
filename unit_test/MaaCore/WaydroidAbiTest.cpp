@@ -96,7 +96,7 @@ static_assert(asst::waydroid::pwabi::kDataDmaBuf == SPA_DATA_DmaBuf);
 static_assert(asst::waydroid::pwabi::kMetaVideoTransform == SPA_META_VideoTransform);
 #endif
 
-#if defined(MAA_HAVE_PIPEWIRE_HEADERS)
+#if defined(MAA_HAVE_PIPEWIRE_HEADERS) && defined(MAA_HAVE_SPA_HEADERS)
 #include <pipewire/stream.h>
 
 static_assert(asst::waydroid::pwabi::kVersionStreamEvents == PW_VERSION_STREAM_EVENTS);
