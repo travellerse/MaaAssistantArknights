@@ -14,6 +14,19 @@
         "src/MaaCore/Utils/Algorithm.hpp",
         "unit_test/MaaCore/AlgorithmTest.cpp"
       ]
+    },
+    {
+      "id": "maa-waydroid-test",
+      "name": "Waydroid",
+      "buildTarget": "maa-waydroid-test",
+      "ctestRegex": "^waydroid::",
+      "paths": [
+        "src/MaaCore/Controller/Waydroid/**",
+        "src/MaaCore/Controller/WaydroidExtras.cpp",
+        "src/MaaCore/Controller/WaydroidExtras.h",
+        "unit_test/MaaCore/WaydroidTest.cpp",
+        "unit_test/MaaCore/WaydroidAbiTest.cpp"
+      ]
     }
   ]
 }

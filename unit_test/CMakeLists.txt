@@ -35,3 +35,38 @@ target_link_libraries(maa-algorithm-test PRIVATE Catch2::Catch2WithMain)
 target_include_directories(maa-algorithm-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore)
 
 catch_discover_tests(maa-algorithm-test TEST_PREFIX "algorithm::")
+
+add_executable(maa-waydroid-test
+    MaaCore/WaydroidTest.cpp
+    MaaCore/WaydroidAbiTest.cpp
+    ../src/MaaCore/Controller/Waydroid/SpaPod.cpp
+    ../src/MaaCore/Controller/Waydroid/WindowMatcher.cpp
+)
+
+target_compile_features(maa-waydroid-test PRIVATE cxx_std_20)
+target_link_libraries(maa-waydroid-test PRIVATE Catch2::Catch2WithMain)
+target_include_directories(maa-waydroid-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore)
+
+# Cross-check the hand-written ABI against the system headers when available.
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(DBUS QUIET dbus-1)
+    if(DBUS_FOUND)
+        target_compile_definitions(maa-waydroid-test PRIVATE MAA_HAVE_DBUS_HEADERS=1)
+        target_include_directories(maa-waydroid-test PRIVATE ${DBUS_INCLUDE_DIRS})
+    endif()
+
+    pkg_check_modules(SPA QUIET libspa-0.2)
+    if(SPA_FOUND)
+        target_compile_definitions(maa-waydroid-test PRIVATE MAA_HAVE_SPA_HEADERS=1)
+        target_include_directories(maa-waydroid-test PRIVATE ${SPA_INCLUDE_DIRS})
+    endif()
+
+    pkg_check_modules(PIPEWIRE QUIET libpipewire-0.3)
+    if(PIPEWIRE_FOUND)
+        target_compile_definitions(maa-waydroid-test PRIVATE MAA_HAVE_PIPEWIRE_HEADERS=1)
+        target_include_directories(maa-waydroid-test PRIVATE ${PIPEWIRE_INCLUDE_DIRS})
+    endif()
+endif()
+
+catch_discover_tests(maa-waydroid-test TEST_PREFIX "waydroid::")
