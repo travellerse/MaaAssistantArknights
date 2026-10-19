@@ -82,11 +82,18 @@ struct SpaData
     SpaChunk* chunk;
 };
 
+struct SpaMeta
+{
+    uint32_t type;
+    uint32_t size;
+    void* data;
+};
+
 struct SpaBuffer
 {
     uint32_t n_metas;
     uint32_t n_datas;
-    void* metas;
+    SpaMeta* metas;
     SpaData* datas;
 };
 
@@ -142,6 +149,9 @@ inline constexpr uint32_t kChoiceEnum = 3;
 // spa/buffer/buffer.h
 inline constexpr uint32_t kDataMemPtr = 1;
 inline constexpr uint32_t kDataMemFd = 2;
+
+// spa/buffer/meta.h
+inline constexpr uint32_t kMetaVideoTransform = 7;
 
 // pipewire/stream.h
 inline constexpr uint32_t kVersionStreamEvents = 2;
