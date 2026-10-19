@@ -271,7 +271,7 @@ AVD スクリーンショット強化モードは MaaFramework 内で実装さ�
 
 ### Waydroid スクリーンショット強化モード
 
-Waydroid のスクリーンショット拡張は `Waydroid` 接続設定を選択すると自動的に有効になり、追加のスイッチは不要です。Linux ネイティブの MaaCore では、KDE は KWin、その他のデスクトップは `xdg-desktop-portal` 経由で取得します。利用できない場合は ADB のスクリーンショットに自動的にフォールバックします。Wine で WPF を実行する場合は、MaaWineBridge 経由で Linux ネイティブの MaaCore を読み込む必要があります。詳細は [Linux エミュレーターとコンテナ](./device/linux.md) を参照してください。
+Waydroid のスクリーンショット拡張は `Waydroid` 接続設定を選択すると自動的に有効になり、追加のスイッチは不要です。Linux ネイティブの MaaCore では、KDE は KWin、その他のデスクトップは `xdg-desktop-portal` 経由で取得します（現時点では KDE の Portal 実装のみ検証済み）。利用できない場合は ADB のスクリーンショットに自動的にフォールバックします。Wine で WPF を実行する場合は、MaaWineBridge 経由で Linux ネイティブの MaaCore を読み込む必要があります。詳細は [Linux エミュレーターとコンテナ](./device/linux.md) を参照してください。
 
 ## タッチモード
 

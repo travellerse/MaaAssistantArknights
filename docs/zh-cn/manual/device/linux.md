@@ -163,12 +163,12 @@ Waydroid 没有 Minitouch 所必需的 `/dev/input/eventN`，无法使用 Minito
 使用 Linux 原生 MaaCore（maa-cli、Python 或 MaaWineBridge）时，MaaCore 会直接采集宿主上的 Waydroid 窗口，不再通过 ADB `screencap` 取图：
 
 - KDE：通过 KWin 的 `ScreenShot2` 接口直接抓取 Waydroid 窗口，窗口被遮挡或最小化时仍可采集。
-- 其他桌面：通过 `xdg-desktop-portal` 的 `ScreenCast` 接口取帧。首次使用会弹出一次窗口选择框，选择 Waydroid 窗口即可，选择结果会自动保存。部分 Portal 实现只支持显示器抓取，此时请让 Waydroid 全屏运行。
+- 其他桌面：通过 `xdg-desktop-portal` 的 `ScreenCast` 接口取帧。首次使用会弹出一次窗口选择框，选择 Waydroid 窗口即可，选择结果会自动保存。目前仅在 KDE 的 Portal 实现上验证过，GNOME 等其他实现尚未验证，取帧失败时会自动回退到 ADB。部分 Portal 实现只支持显示器抓取，此时请让 Waydroid 全屏运行。
 - 以上方式不可用时自动回退到 ADB 截图，不影响连接。
 
 同一台机器上，KWin 路径的截图耗时通常为几毫秒，Portal 路径通常为十余毫秒，均明显低于 ADB `screencap` 的数十到上百毫秒；具体数值取决于桌面环境、窗口刷新状态和系统负载。
 
-WPF 用户可在连接设置中选择 `Waydroid` 配置，触控模式选择 `MaaTouch`。使用 Wine 运行 WPF 时，需要通过 MaaWineBridge 加载 Linux 原生 MaaCore；Windows / macOS 版 MaaCore 不包含此功能。
+WPF 用户可在连接设置中选择 `Waydroid` 配置，触控模式选择 `MaaTouch`。使用 Wine 运行 WPF 时，需要通过 MaaWineBridge 加载 Linux 原生 MaaCore；Windows / macOS 版 MaaCore 不包含此功能。`Waydroid` 配置的默认地址为 `192.168.240.112:5555`（Waydroid 默认 NAT 地址），如修改过 Waydroid 网络设置请自行调整。
 
 可通过 `AsstSetConnectionExtras("Waydroid", ...)` 指定后端：
 

@@ -211,7 +211,7 @@ AVD Screenshot Enhanced Mode is implemented in MaaFramework. Touch mode must be 
 
 ### Waydroid Screenshot Enhanced Mode
 
-Waydroid screencap enhancement is enabled automatically by the `Waydroid` connection preset; no separate switch is needed. With the native Linux MaaCore, KDE captures the window through KWin and other desktops use `xdg-desktop-portal`; if unavailable, MAA falls back to ADB screencap. WPF under Wine requires the native Linux MaaCore through MaaWineBridge. See [Linux Emulators and Containers](./device/linux.md).
+Waydroid screencap enhancement is enabled automatically by the `Waydroid` connection preset; no separate switch is needed. With the native Linux MaaCore, KDE captures the window through KWin and other desktops use `xdg-desktop-portal` (only KDE's portal implementation is verified so far); if unavailable, MAA falls back to ADB screencap. WPF under Wine requires the native Linux MaaCore through MaaWineBridge. See [Linux Emulators and Containers](./device/linux.md).
 
 ## Touch Mode
 

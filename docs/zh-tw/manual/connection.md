@@ -213,7 +213,7 @@ AVD 截圖增強模式在 MaaFramework 中實現，必須選擇 MaaFwAdb 觸控�
 
 ### Waydroid 截圖增強模式
 
-Waydroid 的截圖增強會隨 `Waydroid` 連線設定自動啟用，無需額外開關。使用 Linux 原生 MaaCore 時，KDE 下透過 KWin 直接擷取視窗，其他桌面透過 `xdg-desktop-portal` 取得畫面；無法使用時自動回退 ADB 截圖。透過 Wine 執行 WPF 時，需透過 MaaWineBridge 載入 Linux 原生 MaaCore。詳見 [Linux 模擬器與容器](./device/linux.md)。
+Waydroid 的截圖增強會隨 `Waydroid` 連線設定自動啟用，無需額外開關。使用 Linux 原生 MaaCore 時，KDE 下透過 KWin 直接擷取視窗，其他桌面透過 `xdg-desktop-portal` 取得畫面（目前僅驗證 KDE 的 Portal 實作）；無法使用時自動回退 ADB 截圖。透過 Wine 執行 WPF 時，需透過 MaaWineBridge 載入 Linux 原生 MaaCore。詳見 [Linux 模擬器與容器](./device/linux.md)。
 
 ## 觸控模式
 

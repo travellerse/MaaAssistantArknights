@@ -221,7 +221,7 @@ AVD 스크린샷 향상 모드는 MaaFramework에서 구현되므로, AVD 스크
 
 ### Waydroid 스크린샷 향상 모드
 
-Waydroid 스크린샷 향상은 `Waydroid` 연결 프리셋을 선택하면 자동으로 활성화되며 별도의 스위치는 필요하지 않습니다. Linux 네이티브 MaaCore에서는 KDE는 KWin, 기타 데스크톱은 `xdg-desktop-portal`을 통해 캡처합니다. 사용할 수 없으면 ADB 스크린샷으로 자동 전환됩니다. Wine에서 WPF를 실행할 때는 MaaWineBridge를 통해 Linux 네이티브 MaaCore를 로드해야 합니다. 자세한 내용은 [Linux 에뮬레이터 및 컨테이너](./device/linux.md)를 참고하세요.
+Waydroid 스크린샷 향상은 `Waydroid` 연결 프리셋을 선택하면 자동으로 활성화되며 별도의 스위치는 필요하지 않습니다. Linux 네이티브 MaaCore에서는 KDE는 KWin, 기타 데스크톱은 `xdg-desktop-portal`을 통해 캡처합니다(현재 KDE의 Portal 구현에서만 검증됨). 사용할 수 없으면 ADB 스크린샷으로 자동 전환됩니다. Wine에서 WPF를 실행할 때는 MaaWineBridge를 통해 Linux 네이티브 MaaCore를 로드해야 합니다. 자세한 내용은 [Linux 에뮬레이터 및 컨테이너](./device/linux.md)를 참고하세요.
 
 ## 터치 모드
 
