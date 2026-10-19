@@ -32,9 +32,10 @@ inline std::filesystem::path path(const os_string& os_str)
 {
 #ifdef _WIN32
     return std::filesystem::path(os_str);
-#else
+#elif defined(__linux__)
     // 经 Wine 运行时，Windows GUI 传来的是 `Z:\dir\file` 形式的路径，POSIX 的 path 既不认盘符也不把 `\`
     // 当分隔符，整串会被降级成相对路径。Wine 把 Z: 映射到文件系统根，故剥掉盘符并换用 `/`。
+    // 仅在 Linux 上做此转换；macOS 等平台的反斜杠是合法文件名字符。
     const std::string_view utf8_view = os_str;
     const bool has_drive = utf8_view.size() >= 3 && std::isalpha(static_cast<unsigned char>(utf8_view[0])) &&
                            utf8_view[1] == ':' && (utf8_view[2] == '\\' || utf8_view[2] == '/');
@@ -44,6 +45,8 @@ inline std::filesystem::path path(const os_string& os_str)
     std::string posix_path = has_drive ? std::string(utf8_view.substr(2)) : std::string(utf8_view);
     std::replace(posix_path.begin(), posix_path.end(), '\\', '/');
     return std::filesystem::path(posix_path);
+#else
+    return std::filesystem::path(os_str);
 #endif
 }
 
