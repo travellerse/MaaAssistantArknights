@@ -15,11 +15,37 @@
 
 #define AsstMsg_Destroyed (5)
 
+#define ENSURE_MAACORE(ret)      \
+    do {                         \
+        if (!dl_maacore_ready()) { \
+            return ret;          \
+        }                        \
+    } while (0)
+
+#define ENSURE_MAACORE_VOID()    \
+    do {                         \
+        if (!dl_maacore_ready()) { \
+            return;              \
+        }                        \
+    } while (0)
+
 static char* translate_utf8_path(const char* utf8_win_path)
 {
+    if (!utf8_win_path) {
+        return NULL;
+    }
     int len = MultiByteToWideChar(CP_UTF8, 0, utf8_win_path, -1, NULL, 0);
-    wchar_t* wpath = malloc(len * sizeof(wchar_t));
-    MultiByteToWideChar(CP_UTF8, 0, utf8_win_path, -1, wpath, len);
+    if (len <= 0) {
+        return NULL;
+    }
+    WCHAR* wpath = malloc((size_t)len * sizeof(WCHAR));
+    if (!wpath) {
+        return NULL;
+    }
+    if (MultiByteToWideChar(CP_UTF8, 0, utf8_win_path, -1, wpath, len) <= 0) {
+        free(wpath);
+        return NULL;
+    }
     char* unix_path = wine_get_unix_file_name(wpath);
     free(wpath);
     return unix_path;
@@ -27,6 +53,9 @@ static char* translate_utf8_path(const char* utf8_win_path)
 
 static int win32_free(void* ptr)
 {
+    if (!ptr) {
+        return TRUE;
+    }
     return HeapFree(GetProcessHeap(), 0, ptr);
 }
 
@@ -46,12 +75,14 @@ typedef struct
     AsstMsgId msg;
     const char* details_json;
     void* custom_arg;
-    TaskQueue* queue;
 } CallbackInvocation;
 
 static CallbackState* cb_state_new()
 {
     CallbackState* fwd_state = malloc(sizeof(CallbackState));
+    if (!fwd_state) {
+        return NULL;
+    }
     memset(fwd_state, 0, sizeof(CallbackState));
     TaskQueue* queue = task_queue_new(task_queue_worker_wine_new);
     if (!queue) {
@@ -64,6 +95,9 @@ static CallbackState* cb_state_new()
 
 static void cb_state_free(CallbackState* fwd_state)
 {
+    if (!fwd_state) {
+        return;
+    }
     task_queue_free(fwd_state->queue);
     free(fwd_state);
 }
@@ -72,12 +106,18 @@ static void invoke_helper(void* arg)
 {
     // called in win32 thread
     CallbackInvocation* invocation = arg;
+    if (!invocation || !invocation->x64abi_callback) {
+        return;
+    }
     invocation->x64abi_callback(invocation->msg, invocation->details_json, invocation->custom_arg);
 }
 
 static void UnixCallbackShim(AsstMsgId msg, const char* details_json, void* custom_arg)
 {
     CallbackState* state = (CallbackState*)custom_arg;
+    if (!state) {
+        return;
+    }
     CallbackInvocation invocation = {
         .x64abi_callback = state->x64abi_callback,
         .msg = msg,
@@ -85,8 +125,10 @@ static void UnixCallbackShim(AsstMsgId msg, const char* details_json, void* cust
         .custom_arg = state->custom_arg,
     };
     Task* task = task_queue_push(state->queue, invoke_helper, &invocation);
-    task_wait(task);
-    task_release(task);
+    if (task) {
+        task_wait(task);
+        task_release(task);
+    }
     if (msg == AsstMsg_Destroyed) {
         cb_state_free(state);
     }
@@ -94,7 +136,11 @@ static void UnixCallbackShim(AsstMsgId msg, const char* details_json, void* cust
 
 AsstBool __stdcall WineShimAsstSetUserDir(const char* path)
 {
+    ENSURE_MAACORE(0);
     char* unix_path = translate_utf8_path(path);
+    if (!unix_path) {
+        return 0;
+    }
     AsstBool result = dl_AsstSetUserDir(unix_path);
     win32_free(unix_path);
     return result;
@@ -102,7 +148,11 @@ AsstBool __stdcall WineShimAsstSetUserDir(const char* path)
 
 AsstBool __stdcall WineShimAsstLoadResource(const char* path)
 {
+    ENSURE_MAACORE(0);
     char* unix_path = translate_utf8_path(path);
+    if (!unix_path) {
+        return 0;
+    }
     AsstBool result = dl_AsstLoadResource(unix_path);
     win32_free(unix_path);
     return result;
@@ -110,29 +160,43 @@ AsstBool __stdcall WineShimAsstLoadResource(const char* path)
 
 AsstBool __stdcall WineShimAsstSetStaticOption(AsstStaticOptionKey key, const char* value)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstSetStaticOption(key, value);
 }
 
 AsstHandle __stdcall WineShimAsstCreate()
 {
+    ENSURE_MAACORE(NULL);
     return dl_AsstCreate();
 }
 
 AsstHandle __stdcall WineShimAsstCreateEx(AsstApiCallbackMsAbi callback, void* custom_arg)
 {
+    ENSURE_MAACORE(NULL);
+    if (!callback) {
+        return dl_AsstCreate();
+    }
+
     CallbackState* fwd_state = cb_state_new();
-    fwd_state->x64abi_callback = callback;
-    fwd_state->custom_arg = custom_arg;
     if (!fwd_state) {
         return NULL;
     }
+    fwd_state->x64abi_callback = callback;
+    fwd_state->custom_arg = custom_arg;
     // callback needs to be called in a wine thread
     AsstHandle result = dl_AsstCreateEx(UnixCallbackShim, fwd_state);
+    if (!result) {
+        cb_state_free(fwd_state);
+    }
     return result;
 }
 
 void __stdcall WineShimAsstDestroy(AsstHandle handle)
 {
+    ENSURE_MAACORE_VOID();
+    if (!handle) {
+        return;
+    }
     dl_AsstDestroy(handle);
 }
 
@@ -141,6 +205,7 @@ AsstBool __stdcall WineShimAsstSetInstanceOption(
     AsstInstanceOptionKey key,
     const char* value)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstSetInstanceOption(handle, key, value);
 }
 
@@ -150,44 +215,55 @@ AsstBool __stdcall WineShimAsstConnect(
     const char* address,
     const char* config)
 {
+    ENSURE_MAACORE(0);
     char* unix_adb_path = translate_utf8_path(adb_path);
+    if (!unix_adb_path) {
+        return 0;
+    }
     AsstBool result = dl_AsstConnect(handle, unix_adb_path, address, config);
-    HeapFree(GetProcessHeap(), 0, unix_adb_path);
+    win32_free(unix_adb_path);
     return result;
 }
 
 AsstTaskId __stdcall WineShimAsstAppendTask(AsstHandle handle, const char* type, const char* params)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstAppendTask(handle, type, params);
 }
 
 AsstBool __stdcall WineShimAsstSetTaskParams(AsstHandle handle, AsstTaskId id, const char* params)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstSetTaskParams(handle, id, params);
 }
 
 AsstBool __stdcall WineShimAsstStart(AsstHandle handle)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstStart(handle);
 }
 
 AsstBool __stdcall WineShimAsstStop(AsstHandle handle)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstStop(handle);
 }
 
 AsstBool __stdcall WineShimAsstRunning(AsstHandle handle)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstRunning(handle);
 }
 
 AsstBool __stdcall WineShimAsstConnected(AsstHandle handle)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstConnected(handle);
 }
 
 AsstBool __stdcall WineShimAsstBackToHome(AsstHandle handle)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstBackToHome(handle);
 }
 
@@ -198,9 +274,17 @@ AsstAsyncCallId __stdcall WineShimAsstAsyncConnect(
     const char* config,
     AsstBool block)
 {
+    ENSURE_MAACORE(0);
+    if (!adb_path) {
+        return 0;
+    }
+
     char* unix_adb_path;
     if (strchr(adb_path, '/') != NULL || strchr(adb_path, '\\') != NULL) {
         unix_adb_path = translate_utf8_path(adb_path);
+        if (!unix_adb_path) {
+            return 0;
+        }
     }
     else {
         unix_adb_path = (char*)adb_path;
@@ -212,7 +296,9 @@ AsstAsyncCallId __stdcall WineShimAsstAsyncConnect(
     return result;
 }
 
-void __stdcall WineShimAsstSetConnectionExtras(const char* name, const char* extras) {
+void __stdcall WineShimAsstSetConnectionExtras(const char* name, const char* extras)
+{
+    ENSURE_MAACORE_VOID();
     dl_AsstSetConnectionExtras(name, extras);
 }
 
@@ -222,45 +308,54 @@ AsstAsyncCallId __stdcall WineShimAsstAsyncClick(
     int32_t y,
     AsstBool block)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstAsyncClick(handle, x, y, block);
 }
 
 AsstAsyncCallId __stdcall WineShimAsstAsyncScreencap(AsstHandle handle, AsstBool block)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstAsyncScreencap(handle, block);
 }
 
 AsstSize __stdcall WineShimAsstGetImage(AsstHandle handle, void* buff, AsstSize buff_size)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstGetImage(handle, buff, buff_size);
 }
 
 AsstSize __stdcall WineShimAsstGetImageBgr(AsstHandle handle, void* buff, AsstSize buff_size)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstGetImageBgr(handle, buff, buff_size);
 }
 
 AsstSize __stdcall WineShimAsstGetUUID(AsstHandle handle, char* buff, AsstSize buff_size)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstGetUUID(handle, buff, buff_size);
 }
 
 AsstSize __stdcall WineShimAsstGetTasksList(AsstHandle handle, AsstTaskId* buff, AsstSize buff_size)
 {
+    ENSURE_MAACORE(0);
     return dl_AsstGetTasksList(handle, buff, buff_size);
 }
 
 AsstSize __stdcall WineShimAsstGetNullSize()
 {
+    ENSURE_MAACORE(0);
     return dl_AsstGetNullSize();
 }
 
 const char* __stdcall WineShimAsstGetVersion()
 {
+    ENSURE_MAACORE("");
     return dl_AsstGetVersion();
 }
 
 void __stdcall WineShimAsstLog(const char* level, const char* message)
 {
+    ENSURE_MAACORE_VOID();
     dl_AsstLog(level, message);
 }

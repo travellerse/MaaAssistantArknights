@@ -37,3 +37,4 @@ DEFINE_DL_FUNC(AsstGetVersion)
 DEFINE_DL_FUNC(AsstLog)
 
 void dl_init_maacore();
+int dl_maacore_ready(void);
