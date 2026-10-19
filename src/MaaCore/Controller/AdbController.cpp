@@ -400,6 +400,7 @@ void asst::AdbController::close_socket() noexcept
 void asst::AdbController::init_waydroid_extras(const AdbCfg& adb_cfg, const std::string& config)
 {
     if (config != "Waydroid" && !adb_cfg.extras.contains("waydroid_capture")) {
+        m_waydroid_extras.disable();
         return;
     }
     m_waydroid_extras.init(adb_cfg.extras, m_width, m_height);
