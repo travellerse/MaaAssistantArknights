@@ -154,6 +154,10 @@ Assistant::~Assistant()
     if (m_call_thread.joinable()) {
         m_call_thread.join();
     }
+    // The controller owns the asynchronous FPS probe. Destroy it before the
+    // message thread: the probe can still enqueue a connection callback, and
+    // it must see a live message queue while it finishes.
+    m_ctrler.reset();
     if (m_msg_thread.joinable()) {
         m_msg_thread.join();
     }
