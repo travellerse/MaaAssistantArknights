@@ -77,8 +77,6 @@ void message_unref(dbus::Message* message);
 const char* message_path(dbus::Message* message);
 bool is_signal(dbus::Message* message, const char* interface, const char* member);
 
-void skip_value(dbus::MessageIter& iter);
-
 struct Variant
 {
     int type = dbus::kTypeInvalid;

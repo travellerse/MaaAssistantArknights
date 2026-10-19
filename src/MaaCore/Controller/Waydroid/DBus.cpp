@@ -490,25 +490,6 @@ bool is_signal(dbus::Message* message, const char* interface, const char* member
            std::strcmp(message_interface, interface) == 0 && std::strcmp(message_member, member) == 0;
 }
 
-void skip_value(dbus::MessageIter& iter)
-{
-    if (!api().valid()) {
-        return;
-    }
-    const int type = api().message_iter_get_arg_type(&iter);
-    if (type == dbus::kTypeArray || type == dbus::kTypeVariant || type == dbus::kTypeStruct ||
-        type == dbus::kTypeDictEntry) {
-        dbus::MessageIter child {};
-        api().message_iter_recurse(&iter, &child);
-        while (api().message_iter_get_arg_type(&child) != dbus::kTypeInvalid) {
-            skip_value(child);
-            if (api().message_iter_next(&child) == 0) {
-                break;
-            }
-        }
-    }
-}
-
 Variant read_variant(dbus::MessageIter& variant_iter)
 {
     Variant result;
