@@ -248,6 +248,20 @@ std::optional<StreamFormat> parse_stream_format(const pwabi::SpaPod* param)
     }
     return result;
 }
+
+uint32_t read_video_transform(const pwabi::SpaBuffer& buffer)
+{
+    if (buffer.metas == nullptr) {
+        return 0;
+    }
+    for (uint32_t index = 0; index < buffer.n_metas; ++index) {
+        const pwabi::SpaMeta& meta = buffer.metas[index];
+        if (meta.type == pwabi::kMetaVideoTransform && meta.data != nullptr && meta.size >= sizeof(uint32_t)) {
+            return *static_cast<const uint32_t*>(meta.data);
+        }
+    }
+    return 0;
+}
 } // namespace
 
 struct PortalBackend::PipeWire
@@ -991,6 +1005,7 @@ void PortalBackend::on_process_cb(void* user_data)
     static_cast<PortalBackend*>(user_data)->on_process();
 }
 
+// NOLINTNEXTLINE(readability-function-size) — PipeWire process callback
 void PortalBackend::on_process()
 {
     auto& pw = *m_pipewire;
@@ -1012,17 +1027,7 @@ void PortalBackend::on_process()
                 return;
             }
             const pwabi::SpaData& data = spa_buffer->datas[0];
-            uint32_t transform = 0;
-            if (spa_buffer->metas != nullptr) {
-                for (uint32_t meta_index = 0; meta_index < spa_buffer->n_metas; ++meta_index) {
-                    const pwabi::SpaMeta& meta = spa_buffer->metas[meta_index];
-                    if (meta.type == pwabi::kMetaVideoTransform && meta.data != nullptr &&
-                        meta.size >= sizeof(uint32_t)) {
-                        transform = *static_cast<const uint32_t*>(meta.data);
-                        break;
-                    }
-                }
-            }
+            const uint32_t transform = read_video_transform(*spa_buffer);
             if (transform != 0) {
                 static bool transform_warned = false;
                 if (!transform_warned) {
