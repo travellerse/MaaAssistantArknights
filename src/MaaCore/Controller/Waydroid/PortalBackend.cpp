@@ -1,15 +1,18 @@
 #include "PortalBackend.h"
 
 #include "DynLib.h"
+#include "SpaPod.h"
 #include "Utils/Logger.hpp"
 
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include <cerrno>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #include <algorithm>
 #include <array>
@@ -33,92 +36,6 @@ constexpr int kFrameWaitTimeoutMs = 100;
 
 constexpr int kResponseSuccess = 0;
 constexpr int kResponseCancelled = 1;
-
-uint32_t read_u32(const uint8_t* data)
-{
-    uint32_t value = 0;
-    std::memcpy(&value, data, sizeof(value));
-    return value;
-}
-
-void write_u32(uint8_t*& cursor, uint32_t value)
-{
-    std::memcpy(cursor, &value, sizeof(value));
-    cursor += sizeof(value);
-}
-
-size_t align8(size_t value)
-{
-    return (value + 7U) & ~size_t { 7U };
-}
-
-// Builds the EnumFormat spa_pod without depending on PipeWire headers.
-// NOLINTNEXTLINE(readability-function-size) — byte-level SPA pod layout
-size_t build_format_pod(uint8_t* output, size_t capacity, int width, int height)
-{
-    constexpr size_t kPodSize = 168;
-    if (capacity < kPodSize) {
-        return 0;
-    }
-
-    uint8_t* const start = output;
-    uint8_t* cursor = start + 8;
-    write_u32(cursor, pwabi::kObjectFormat);
-    write_u32(cursor, pwabi::kParamEnumFormat);
-
-    write_u32(cursor, pwabi::kFormatMediaType);
-    write_u32(cursor, 0);
-    write_u32(cursor, 4);
-    write_u32(cursor, pwabi::kTypeId);
-    write_u32(cursor, pwabi::kMediaTypeVideo);
-    cursor = start + align8(static_cast<size_t>(cursor - start));
-
-    write_u32(cursor, pwabi::kFormatMediaSubtype);
-    write_u32(cursor, 0);
-    write_u32(cursor, 4);
-    write_u32(cursor, pwabi::kTypeId);
-    write_u32(cursor, pwabi::kMediaSubtypeRaw);
-    cursor = start + align8(static_cast<size_t>(cursor - start));
-
-    write_u32(cursor, pwabi::kFormatVideoFormat);
-    write_u32(cursor, 0);
-    write_u32(cursor, 32);
-    write_u32(cursor, pwabi::kTypeChoice);
-    write_u32(cursor, pwabi::kChoiceEnum);
-    write_u32(cursor, 0);
-    write_u32(cursor, 4);
-    write_u32(cursor, pwabi::kTypeId);
-    write_u32(cursor, pwabi::kVideoFormatBGRx);
-    write_u32(cursor, pwabi::kVideoFormatBGRA);
-    write_u32(cursor, pwabi::kVideoFormatRGBx);
-    write_u32(cursor, pwabi::kVideoFormatRGBA);
-    cursor = start + align8(static_cast<size_t>(cursor - start));
-
-    const uint32_t default_width = width > 0 ? static_cast<uint32_t>(width) : 1280;
-    const uint32_t default_height = height > 0 ? static_cast<uint32_t>(height) : 720;
-    write_u32(cursor, pwabi::kFormatVideoSize);
-    write_u32(cursor, 0);
-    write_u32(cursor, 40);
-    write_u32(cursor, pwabi::kTypeChoice);
-    write_u32(cursor, pwabi::kChoiceRange);
-    write_u32(cursor, 0);
-    write_u32(cursor, 8);
-    write_u32(cursor, pwabi::kTypeRectangle);
-    write_u32(cursor, default_width);
-    write_u32(cursor, default_height);
-    write_u32(cursor, 1);
-    write_u32(cursor, 1);
-    write_u32(cursor, 8192);
-    write_u32(cursor, 8192);
-    cursor = start + align8(static_cast<size_t>(cursor - start));
-
-    const auto total_size = static_cast<size_t>(cursor - start);
-    const auto pod_size = static_cast<uint32_t>(total_size - 8);
-    std::memcpy(start, &pod_size, sizeof(pod_size));
-    constexpr auto kPodTypeObject = uint32_t { 15 };
-    std::memcpy(start + 4, &kPodTypeObject, sizeof(kPodTypeObject));
-    return total_size;
-}
 
 void append_option_string(dbus::MessageIter& options, const char* key, std::string_view value)
 {
@@ -160,7 +77,8 @@ std::string state_dir()
     if (const char* home = std::getenv("HOME"); home != nullptr && *home != '\0') {
         return std::string(home) + "/.local/state";
     }
-    return "/tmp";
+    // No predictable /tmp fallback: the token would be world-reachable.
+    return {};
 }
 
 std::string request_sender_token(std::string_view unique_name)
@@ -176,92 +94,6 @@ std::string request_sender_token(std::string_view unique_name)
     return token;
 }
 
-struct StreamFormat
-{
-    int width = 0;
-    int height = 0;
-    PixelFormat format = PixelFormat::BGRX;
-};
-
-// NOLINTNEXTLINE(readability-function-size) — byte-level SPA pod walk
-std::optional<StreamFormat> parse_stream_format(const pwabi::SpaPod* param)
-{
-    if (param == nullptr) {
-        return std::nullopt;
-    }
-    const auto* object = reinterpret_cast<const pwabi::SpaPodObject*>(param);
-    if (object->pod.type != 15 || object->body.type != pwabi::kObjectFormat) {
-        return std::nullopt;
-    }
-
-    const auto* base = reinterpret_cast<const uint8_t*>(param);
-    const size_t total = 8 + object->pod.size;
-    size_t offset = sizeof(pwabi::SpaPodObject);
-
-    uint32_t video_format = 0;
-    StreamFormat result;
-    while (offset + 16 <= total) {
-        const uint8_t* prop = base + offset;
-        const uint32_t key = read_u32(prop);
-        const uint32_t value_size = read_u32(prop + 8);
-        const uint32_t value_type = read_u32(prop + 12);
-        if (key == pwabi::kFormatVideoFormat) {
-            if (value_type == pwabi::kTypeId) {
-                video_format = read_u32(prop + 16);
-            }
-            else if (value_type == pwabi::kTypeChoice) {
-                video_format = read_u32(prop + 32);
-            }
-        }
-        else if (key == pwabi::kFormatVideoSize) {
-            if (value_type == pwabi::kTypeRectangle) {
-                result.width = static_cast<int>(read_u32(prop + 16));
-                result.height = static_cast<int>(read_u32(prop + 20));
-            }
-            else if (value_type == pwabi::kTypeChoice) {
-                result.width = static_cast<int>(read_u32(prop + 32));
-                result.height = static_cast<int>(read_u32(prop + 36));
-            }
-        }
-        offset += 8 + align8(8 + value_size);
-    }
-
-    switch (video_format) {
-    case pwabi::kVideoFormatBGRx:
-        result.format = PixelFormat::BGRX;
-        break;
-    case pwabi::kVideoFormatBGRA:
-        result.format = PixelFormat::BGRA;
-        break;
-    case pwabi::kVideoFormatRGBx:
-        result.format = PixelFormat::RGBX;
-        break;
-    case pwabi::kVideoFormatRGBA:
-        result.format = PixelFormat::RGBA;
-        break;
-    default:
-        LogWarn << "Waydroid portal: unsupported video format" << VAR(video_format);
-        return std::nullopt;
-    }
-    if (result.width <= 0 || result.height <= 0) {
-        return std::nullopt;
-    }
-    return result;
-}
-
-uint32_t read_video_transform(const pwabi::SpaBuffer& buffer)
-{
-    if (buffer.metas == nullptr) {
-        return 0;
-    }
-    for (uint32_t index = 0; index < buffer.n_metas; ++index) {
-        const pwabi::SpaMeta& meta = buffer.metas[index];
-        if (meta.type == pwabi::kMetaVideoTransform && meta.data != nullptr && meta.size >= sizeof(uint32_t)) {
-            return *static_cast<const uint32_t*>(meta.data);
-        }
-    }
-    return 0;
-}
 } // namespace
 
 struct PortalBackend::PipeWire
@@ -340,17 +172,36 @@ PortalBackend::~PortalBackend()
 
 std::string PortalBackend::token_path()
 {
-    return (std::filesystem::path(state_dir()) / "maa" / "waydroid-portal.token").string();
+    const std::string dir = state_dir();
+    if (dir.empty()) {
+        return {};
+    }
+    return (std::filesystem::path(dir) / "maa" / "waydroid-portal.token").string();
 }
 
 std::string PortalBackend::load_restore_token()
 {
-    std::ifstream file(token_path(), std::ios::binary);
-    if (!file) {
+    const std::string path = token_path();
+    if (path.empty()) {
+        return {};
+    }
+    const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
         return {};
     }
     std::string token;
-    std::getline(file, token);
+    std::array<char, 256> buffer {};
+    while (token.size() < 4096) {
+        const ssize_t count = ::read(fd, buffer.data(), buffer.size());
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            break;
+        }
+        token.append(buffer.data(), static_cast<size_t>(count));
+    }
+    ::close(fd);
     while (!token.empty() && (token.back() == '\n' || token.back() == '\r' || token.back() == ' ')) {
         token.pop_back();
     }
@@ -359,20 +210,37 @@ std::string PortalBackend::load_restore_token()
 
 void PortalBackend::save_restore_token(const std::string& token)
 {
-    if (token.empty()) {
+    const std::string path = token_path();
+    if (token.empty() || path.empty()) {
         return;
     }
-    const auto path = std::filesystem::path(token_path());
+    const auto parent = std::filesystem::path(path).parent_path();
     std::error_code ec;
-    std::filesystem::create_directories(path.parent_path(), ec);
-    std::ofstream file(path, std::ios::binary | std::ios::trunc);
-    if (!file) {
-        LogWarn << "Waydroid portal: cannot save restore token" << VAR(path.string());
+    std::filesystem::create_directories(parent, ec);
+    std::filesystem::permissions(parent, std::filesystem::perms::owner_all, std::filesystem::perm_options::replace, ec);
+    if (ec) {
+        LogWarn << "Waydroid portal: cannot create state directory" << VAR(parent.string());
         return;
     }
-    file << token;
-    file.close();
-    chmod(path.c_str(), 0600);
+    // O_NOFOLLOW avoids writing through a planted symlink.
+    const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0600);
+    if (fd < 0) {
+        LogWarn << "Waydroid portal: cannot save restore token" << VAR(path);
+        return;
+    }
+    size_t written = 0;
+    while (written < token.size()) {
+        const ssize_t count = ::write(fd, token.data() + written, token.size() - written);
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            LogWarn << "Waydroid portal: cannot write restore token" << VAR(path);
+            break;
+        }
+        written += static_cast<size_t>(count);
+    }
+    ::close(fd);
 }
 
 std::string PortalBackend::next_token()
@@ -787,6 +655,12 @@ bool PortalBackend::open_pipewire(std::string& error)
         return false;
     }
     const uint32_t node_id = m_pending_streams.front().node_id;
+    const uint32_t source_type = m_pending_streams.front().source_type;
+    LogInfo << "Waydroid portal stream" << VAR(node_id) << VAR(source_type);
+    constexpr uint32_t kSourceTypeMonitor = 1;
+    if (source_type == kSourceTypeMonitor) {
+        LogWarn << "Waydroid portal: monitor capture selected, keep the Waydroid window fullscreen and visible";
+    }
     const int fd = open_pipewire_remote(error);
     if (fd < 0) {
         return false;
@@ -895,16 +769,27 @@ bool PortalBackend::connect_pipewire_stream(uint32_t node_id, std::string& error
     m_events.state_changed = &PortalBackend::on_state_changed_cb;
     pw.stream_add_listener(pw.stream, &m_hook, &m_events, this);
 
-    std::array<uint8_t, 256> pod_buffer {};
-    const size_t pod_size = build_format_pod(pod_buffer.data(), pod_buffer.size(), m_expected_width, m_expected_height);
-    std::array<const pwabi::SpaPod*, 1> params { reinterpret_cast<const pwabi::SpaPod*>(pod_buffer.data()) };
+    std::array<uint8_t, 256> format_buffer {};
+    std::array<uint8_t, 128> buffers_buffer {};
+    const size_t format_size =
+        build_format_pod(format_buffer.data(), format_buffer.size(), m_expected_width, m_expected_height);
+    const size_t buffers_size = build_buffers_pod(buffers_buffer.data(), buffers_buffer.size());
+    if (format_size == 0 || buffers_size == 0) {
+        pw.thread_loop_unlock(pw.loop);
+        error = "cannot build PipeWire stream parameters";
+        return false;
+    }
+    std::array<const pwabi::SpaPod*, 2> params {
+        reinterpret_cast<const pwabi::SpaPod*>(format_buffer.data()),
+        reinterpret_cast<const pwabi::SpaPod*>(buffers_buffer.data()),
+    };
     const int ret = pw.stream_connect(
         pw.stream,
         pwabi::kDirectionInput,
         node_id,
         pwabi::kStreamFlagAutoConnect | pwabi::kStreamFlagMapBuffers,
         params.data(),
-        pod_size > 0 ? 1 : 0);
+        static_cast<uint32_t>(params.size()));
     pw.thread_loop_unlock(pw.loop);
     if (ret < 0) {
         error = "PipeWire stream connect failed";
@@ -989,8 +874,12 @@ void PortalBackend::on_param_changed(uint32_t id, const pwabi::SpaPod* param)
     if (id != pwabi::kParamFormat) {
         return;
     }
+    if (param == nullptr) {
+        return;
+    }
     const auto format = parse_stream_format(param);
     if (!format) {
+        LogDebug << "Waydroid portal: cannot parse stream format";
         return;
     }
     m_stream_width = format->width;
@@ -1027,6 +916,11 @@ void PortalBackend::on_process()
                 return;
             }
             const pwabi::SpaData& data = spa_buffer->datas[0];
+            const uint32_t data_type = data.type;
+            if (!m_buffer_type_logged) {
+                m_buffer_type_logged = true;
+                LogInfo << "Waydroid portal buffer data type" << VAR(data_type);
+            }
             const uint32_t transform = read_video_transform(*spa_buffer);
             if (transform != 0) {
                 static bool transform_warned = false;
@@ -1039,13 +933,24 @@ void PortalBackend::on_process()
                 pw.stream_queue_buffer(pw.stream, buffer);
                 return;
             }
+            if (data.data == nullptr) {
+                if (!m_buffer_warned) {
+                    m_buffer_warned = true;
+                    LogWarn << "Waydroid portal: PipeWire buffer is not CPU-mapped" << VAR(data_type);
+                }
+                m_stream_error = true;
+                m_frame_ready.notify_all();
+                pw.stream_queue_buffer(pw.stream, buffer);
+                return;
+            }
             const int width = m_stream_width;
             const int height = m_stream_height;
             const int row_bytes = width * 4;
             int stride = data.chunk != nullptr ? data.chunk->stride : row_bytes;
             stride = std::max(stride, row_bytes);
             const size_t required = (static_cast<size_t>(stride) * static_cast<size_t>(height - 1)) + row_bytes;
-            if (data.data != nullptr && data.chunk != nullptr && data.chunk->size >= required) {
+            const size_t chunk_size = data.chunk != nullptr ? data.chunk->size : 0;
+            if (chunk_size >= required) {
                 const size_t max_size = data.maxsize;
                 const size_t offset = max_size > 0 ? data.chunk->offset % max_size : data.chunk->offset;
                 const auto* source = static_cast<const uint8_t*>(data.data) + offset;
@@ -1064,6 +969,10 @@ void PortalBackend::on_process()
                 m_has_frame = true;
                 m_want_frame = false;
                 m_frame_ready.notify_all();
+            }
+            else if (!m_buffer_warned) {
+                m_buffer_warned = true;
+                LogWarn << "Waydroid portal: PipeWire buffer is too small" << VAR(chunk_size) << VAR(required);
             }
         }
     }
@@ -1099,6 +1008,8 @@ void PortalBackend::stop() noexcept
     m_stream_width = 0;
     m_stream_height = 0;
     m_stream_error = false;
+    m_buffer_type_logged = false;
+    m_buffer_warned = false;
     m_latest = Frame {};
 }
 

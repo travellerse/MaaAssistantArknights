@@ -126,5 +126,7 @@ private:
     bool m_stream_error = false;
     bool m_started = false;
     bool m_rejected = false;
+    bool m_buffer_type_logged = false;
+    bool m_buffer_warned = false;
 };
 } // namespace asst::waydroid
