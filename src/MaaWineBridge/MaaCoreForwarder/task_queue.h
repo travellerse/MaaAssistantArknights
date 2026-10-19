@@ -20,8 +20,6 @@ void task_queue_free(TaskQueue* queue);
 Task* task_queue_push(TaskQueue* queue, TaskFunc function, void* arg);
 Task* task_queue_pop(TaskQueue* queue);
 
-void thread_pool_worker(TaskQueue* queue);
-
 void task_wait(Task* task);
 void task_invoke(Task* task);
 void task_addref(Task* task);
