@@ -105,6 +105,7 @@ public class ConnectSettingsUserControlModel : PropertyChangedBase
         (ConnectConfig.XYAZ, "XYAZ"),
         (ConnectConfig.PC, "PC"),
         (ConnectConfig.WSA, "WSA"),
+        (ConnectConfig.Waydroid, "Waydroid"),
         (ConnectConfig.Compatible, "Compatible"),
         (ConnectConfig.SecondResolution, "SecondResolution"),
         (ConnectConfig.GeneralWithoutScreencapErr, "GeneralWithoutScreencapErr"));
@@ -392,6 +393,7 @@ public class ConnectSettingsUserControlModel : PropertyChangedBase
             { "XYAZ", ["127.0.0.1:21503"] },
             { "Androws", ["127.0.0.1:5555"] },
             { "WSA", ["127.0.0.1:58526"] },
+            { "Waydroid", ["192.168.240.112:5555"] },
         };
 
     /// <summary>
