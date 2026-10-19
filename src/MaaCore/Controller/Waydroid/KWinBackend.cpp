@@ -1,21 +1,26 @@
 #include "KWinBackend.h"
 
 #include "Utils/Logger.hpp"
+#include "WindowMatcher.h"
 
 #include <meojson/json.hpp>
 
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include <algorithm>
 #include <array>
-#include <cctype>
+#include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -29,7 +34,46 @@ constexpr const char* kScriptingInterface = "org.kde.kwin.Scripting";
 constexpr const char* kScreenShotPath = "/org/kde/KWin/ScreenShot2";
 constexpr const char* kScreenShotInterface = "org.kde.KWin.ScreenShot2";
 constexpr int kCaptureTimeoutMs = 3000;
+constexpr int kReadPollIntervalMs = 100;
 constexpr size_t kReadBufferSize = size_t { 64 } * 1024;
+
+// Drains the capture pipe until EOF. KWin may keep a duplicate of the write
+// end after the D-Bus reply, so a plain blocking read can hang forever; the
+// poll interval lets the reader stop once the caller has closed its end.
+void read_capture_pipe(int read_fd, std::vector<uint8_t>& data, const std::atomic<bool>& caller_closed)
+{
+    std::array<uint8_t, kReadBufferSize> buffer {};
+    while (true) {
+        pollfd descriptor { read_fd, POLLIN, 0 };
+        const int ready = ::poll(&descriptor, 1, kReadPollIntervalMs);
+        if (ready < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            break;
+        }
+        if (ready == 0) {
+            if (caller_closed.load(std::memory_order_acquire)) {
+                break;
+            }
+            continue;
+        }
+        if ((descriptor.revents & (POLLIN | POLLHUP)) == 0) {
+            break;
+        }
+        const ssize_t count = ::read(read_fd, buffer.data(), buffer.size());
+        if (count > 0) {
+            data.insert(data.end(), buffer.begin(), buffer.begin() + count);
+            continue;
+        }
+        if (count == 0) {
+            break;
+        }
+        if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+            break;
+        }
+    }
+}
 
 std::string runtime_dir()
 {
@@ -61,50 +105,6 @@ callDBus(")JS";
     script += R"JS(", "Report", JSON.stringify(windows));
 )JS";
     return script;
-}
-
-std::string to_lower(std::string_view text)
-{
-    std::string result(text);
-    std::ranges::transform(result, result.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
-    return result;
-}
-
-bool is_waydroid_pid(int pid)
-{
-    if (pid <= 0) {
-        return false;
-    }
-    std::ifstream file("/proc/" + std::to_string(pid) + "/cgroup");
-    std::string line;
-    while (std::getline(file, line)) {
-        if (line.find("waydroid") != std::string::npos) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool is_waydroid_window(
-    const std::string& resource_class,
-    const std::string& caption,
-    int pid,
-    const std::string& selector)
-{
-    if (!selector.empty()) {
-        const std::string lower_selector = to_lower(selector);
-        return to_lower(resource_class).find(lower_selector) != std::string::npos ||
-               to_lower(caption).find(lower_selector) != std::string::npos;
-    }
-    const std::string lower_class = to_lower(resource_class);
-    if (lower_class == "waydroid" || lower_class.starts_with("waydroid.")) {
-        return true;
-    }
-    // Full-UI and some app windows do not use the waydroid.* class. The
-    // window's client lives in the Waydroid LXC cgroup, which is stable.
-    return is_waydroid_pid(pid);
 }
 
 struct CaptureGeometry
@@ -250,6 +250,7 @@ bool KWinBackend::run_script(const std::string& path, const std::string& plugin_
     }
     dbus::Message* reply = m_bus.call(message, kCaptureTimeoutMs, error);
     const bool load_ok = reply != nullptr;
+    m_kwin_reachable = load_ok;
     dbus_util::message_unref(reply);
     dbus_util::message_unref(message);
     if (!load_ok) {
@@ -295,6 +296,7 @@ bool KWinBackend::run_script(const std::string& path, const std::string& plugin_
 
 bool KWinBackend::discover_window()
 {
+    m_last_discovery = std::chrono::steady_clock::now();
     static uint64_t counter = 0;
     const auto path =
         std::filesystem::path(runtime_dir()) /
@@ -359,15 +361,24 @@ bool KWinBackend::select_window(const std::string& report)
         }
     }
 
+    // Prefer a visible app window over the full UI shell, then the largest
+    // one. Keep the current binding when it is still present unless an app
+    // window can replace the shell, so focus changes do not switch captures.
     const Candidate* chosen = nullptr;
+    const Candidate* current = nullptr;
+    int chosen_score = 0;
     for (const auto& candidate : candidates) {
         if (!is_waydroid_window(candidate.resource_class, candidate.caption, candidate.pid, m_selector)) {
             continue;
         }
-        if (chosen == nullptr || (!candidate.minimized && chosen->minimized) ||
-            (candidate.minimized == chosen->minimized &&
-             candidate.width * candidate.height > chosen->width * chosen->height)) {
+        if (!m_handle.empty() && candidate.handle == m_handle) {
+            current = &candidate;
+        }
+        const int score = window_score(candidate.minimized, candidate.resource_class);
+        const bool larger = chosen != nullptr && candidate.width * candidate.height > chosen->width * chosen->height;
+        if (chosen == nullptr || score > chosen_score || (score == chosen_score && larger)) {
             chosen = &candidate;
+            chosen_score = score;
         }
     }
     if (chosen == nullptr) {
@@ -378,12 +389,23 @@ bool KWinBackend::select_window(const std::string& report)
         }
         return false;
     }
+    if (current != nullptr && chosen != current) {
+        const int current_score = window_score(current->minimized, current->resource_class);
+        const bool upgrade = is_app_window_class(chosen->resource_class) &&
+                             !is_app_window_class(current->resource_class) && chosen_score >= current_score;
+        if (!upgrade) {
+            chosen = current;
+        }
+    }
 
+    const bool changed = m_handle != chosen->handle;
     m_handle = chosen->handle;
     m_caption = chosen->caption;
     m_resource_class = chosen->resource_class;
-    LogInfo << "KWin capture window" << VAR(m_caption) << VAR(m_resource_class) << VAR(chosen->width)
-            << VAR(chosen->height) << VAR(m_expected_width) << VAR(m_expected_height);
+    if (changed) {
+        LogInfo << "KWin capture window" << VAR(m_caption) << VAR(m_resource_class) << VAR(chosen->width)
+                << VAR(chosen->height) << VAR(m_expected_width) << VAR(m_expected_height);
+    }
     return true;
 }
 
@@ -392,7 +414,13 @@ std::optional<Frame> KWinBackend::capture()
     if (!m_bus.valid()) {
         return std::nullopt;
     }
-    if (m_handle.empty() && !discover_window()) {
+    // When bound to the full UI shell, Waydroid may open the app in its own
+    // window later (multi-window mode). Poll occasionally so that window can
+    // replace the shell; app windows themselves are kept until they vanish.
+    constexpr auto kUpgradeInterval = std::chrono::seconds(30);
+    const bool upgrade_due = !m_handle.empty() && !is_app_window_class(m_resource_class) &&
+                             std::chrono::steady_clock::now() - m_last_discovery >= kUpgradeInterval;
+    if ((m_handle.empty() || upgrade_due) && !discover_window() && m_handle.empty()) {
         return std::nullopt;
     }
 
@@ -490,20 +518,14 @@ bool KWinBackend::capture_into(
         return false;
     }
 
-    std::thread reader([&data, read_fd = pipe_fds.at(0)] {
-        std::array<uint8_t, kReadBufferSize> buffer {};
-        while (true) {
-            const ssize_t count = ::read(read_fd, buffer.data(), buffer.size());
-            if (count <= 0) {
-                break;
-            }
-            data.insert(data.end(), buffer.begin(), buffer.begin() + count);
-        }
-    });
+    std::atomic<bool> caller_closed { false };
+    std::thread reader(
+        [&data, &caller_closed, read_fd = pipe_fds.at(0)] { read_capture_pipe(read_fd, data, caller_closed); });
 
     dbus::Message* message = new_capture_message(pipe_fds.at(1));
     if (message == nullptr) {
         ::close(pipe_fds.at(1));
+        caller_closed.store(true, std::memory_order_release);
         reader.join();
         ::close(pipe_fds.at(0));
         return false;
@@ -513,6 +535,7 @@ bool KWinBackend::capture_into(
     dbus::Message* reply = m_bus.call(message, kCaptureTimeoutMs, error);
     dbus_util::message_unref(message);
     ::close(pipe_fds.at(1));
+    caller_closed.store(true, std::memory_order_release);
     reader.join();
     ::close(pipe_fds.at(0));
 
