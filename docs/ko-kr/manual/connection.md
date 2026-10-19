@@ -219,6 +219,10 @@ AVD 스크린샷 향상 모드는 MaaFramework에서 구현되므로, AVD 스크
 
 2. `터치 수행 방식`에서 `MaaFwAdb`를 선택합니다.
 
+### Waydroid 스크린샷 향상 모드
+
+Waydroid 스크린샷 향상은 `Waydroid` 연결 프리셋을 선택하면 자동으로 활성화되며 별도의 스위치는 필요하지 않습니다. Linux 네이티브 MaaCore에서는 KDE는 KWin, 기타 데스크톱은 `xdg-desktop-portal`을 통해 캡처합니다. 사용할 수 없으면 ADB 스크린샷으로 자동 전환됩니다. Wine에서 WPF를 실행할 때는 MaaWineBridge를 통해 Linux 네이티브 MaaCore를 로드해야 합니다. 자세한 내용은 [Linux 에뮬레이터 및 컨테이너](./device/linux.md)를 참고하세요.
+
 ## 터치 모드
 
 1. [Minitouch](https://github.com/DeviceFarmer/minitouch): C로 작성된 Android 터치 이벤트 핸들러로, 외부 프로그램이 터치 이벤트와 제스처를 트리거할 수 있는 소켓 인터페이스를 제공합니다. Android 10부터는 SELinux가 `Enforcing` 모드일 때 Minitouch가 더 이상 사용되지 않습니다. (기본값)
