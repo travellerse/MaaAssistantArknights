@@ -32,6 +32,9 @@ bool WaydroidExtras::init(const json::object& extras, int width, int height)
     m_height = height;
     m_mode = Mode::Auto;
     m_selector.clear();
+    m_portal_rejected = false;
+    m_kwin_available = false;
+    m_next_upgrade = {};
 
     if (auto object = extras.find<json::object>("waydroid_capture")) {
         const std::string mode = object->get("mode", std::string("auto"));
@@ -89,7 +92,7 @@ bool WaydroidExtras::reload(int width, int height)
     return enabled();
 }
 
-bool WaydroidExtras::start_backend(int width, int height)
+bool WaydroidExtras::start_backend(int width, int height, bool allow_portal)
 {
     if (m_backend != nullptr) {
         return true;
@@ -98,17 +101,25 @@ bool WaydroidExtras::start_backend(int width, int height)
         return false;
     }
 
+    bool kwin_reachable = false;
     if (m_mode == Mode::Auto || m_mode == Mode::KWin) {
         auto backend = std::make_unique<waydroid::KWinBackend>();
         if (backend->start(width, height, m_selector)) {
+            m_kwin_available = true;
             LogInfo << "Waydroid capture backend started" << VAR(backend->name());
             m_backend = std::move(backend);
             return true;
         }
+        kwin_reachable = backend->reachable();
+        m_kwin_available = kwin_reachable;
         backend->stop();
     }
 
-    if ((m_mode == Mode::Auto || m_mode == Mode::Portal) && !m_portal_rejected) {
+    // On KDE the window may simply not exist yet. Do not raise a portal
+    // picker in that case; try_upgrade() retries KWin when the window shows.
+    const bool portal_allowed = allow_portal && (m_mode == Mode::Auto || m_mode == Mode::Portal) &&
+                                !m_portal_rejected && !(m_mode == Mode::Auto && kwin_reachable);
+    if (portal_allowed) {
         auto backend = std::make_unique<waydroid::PortalBackend>();
         if (backend->start(width, height, m_selector)) {
             LogInfo << "Waydroid capture backend started" << VAR(backend->name());
@@ -123,12 +134,29 @@ bool WaydroidExtras::start_backend(int width, int height)
 
 bool WaydroidExtras::prepare()
 {
-    return start_backend(m_width, m_height);
+    return start_backend(m_width, m_height, true);
+}
+
+bool WaydroidExtras::try_upgrade()
+{
+    if (m_backend != nullptr) {
+        return true;
+    }
+    if (m_mode == Mode::Off || m_mode == Mode::Portal || !m_kwin_available) {
+        return false;
+    }
+    constexpr auto kRetryInterval = std::chrono::seconds(10);
+    const auto now = std::chrono::steady_clock::now();
+    if (now < m_next_upgrade) {
+        return false;
+    }
+    m_next_upgrade = now + kRetryInterval;
+    return start_backend(m_width, m_height, false);
 }
 
 std::optional<cv::Mat> WaydroidExtras::screencap()
 {
-    if (m_backend == nullptr && !start_backend(m_width, m_height)) {
+    if (m_backend == nullptr && !start_backend(m_width, m_height, false)) {
         return std::nullopt;
     }
 

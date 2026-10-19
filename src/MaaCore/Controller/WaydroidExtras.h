@@ -7,6 +7,7 @@
 
 #include <meojson/json.hpp>
 
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <string>
@@ -50,10 +51,15 @@ public:
     // mistaken for the steady-state screencap cost.
     bool prepare();
 
+    // Retries KWin when the first probe ran before the Waydroid window
+    // existed. Rate-limited and never falls through to the portal, so a
+    // screencap never blocks on a window picker.
+    bool try_upgrade();
+
     std::optional<cv::Mat> screencap();
 
 private:
-    bool start_backend(int width, int height);
+    bool start_backend(int width, int height, bool allow_portal);
     std::optional<cv::Mat> convert(const waydroid::Frame& frame);
 
     Mode m_mode = Mode::Off;
@@ -63,7 +69,9 @@ private:
     int m_width = 0;
     int m_height = 0;
     bool m_portal_rejected = false;
+    bool m_kwin_available = false;
     bool m_size_warned = false;
+    std::chrono::steady_clock::time_point m_next_upgrade {};
 };
 } // namespace asst
 

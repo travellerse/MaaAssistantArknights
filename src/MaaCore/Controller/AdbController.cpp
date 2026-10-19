@@ -918,6 +918,15 @@ bool asst::AdbController::screencap(cv::Mat& image_payload, bool allow_reconnect
     else {
         auto start_time = high_resolution_clock::now();
         ScreencapResult screencap_result = ScreencapResult::Failed;
+#if ASST_WITH_WAYDROID_EXTRAS
+        if (m_adb.screencap_method != AdbProperty::ScreencapMethod::WaydroidExtras && m_waydroid_extras.try_upgrade()) {
+            // The window appeared after the initial probe. Retry KWin and
+            // exclude its setup cost from the capture timing.
+            LogInfo << "Waydroid capture became available, switching screencap method";
+            m_adb.screencap_method = AdbProperty::ScreencapMethod::WaydroidExtras;
+            start_time = high_resolution_clock::now();
+        }
+#endif
         switch (m_adb.screencap_method) {
         case AdbProperty::ScreencapMethod::RawByNc:
             screencap_result = screencap(m_adb.screencap_raw_by_nc, decode_raw, allow_reconnect, true);
