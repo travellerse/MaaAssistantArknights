@@ -16,6 +16,14 @@ if(WITH_MAC_SCK)
     endif()
 endif()
 
+if(NOT LINUX OR ANDROID)
+    set(WITH_WAYDROID_EXTRAS OFF)
+endif()
+if(NOT WITH_WAYDROID_EXTRAS)
+    list(FILTER maa_src EXCLUDE REGEX "Controller/Waydroid/")
+    list(FILTER maa_src EXCLUDE REGEX "Controller/WaydroidExtras\\.cpp$")
+endif()
+
 add_library(MaaCore SHARED ${maa_src})
 
 if(WITH_EMULATOR_EXTRAS)
@@ -28,6 +36,7 @@ if(WITH_EMULATOR_EXTRAS)
 endif()
 
 target_compile_definitions(MaaCore PRIVATE ASST_WITH_EMULATOR_EXTRAS=$<BOOL:${WITH_EMULATOR_EXTRAS}>)
+target_compile_definitions(MaaCore PRIVATE ASST_WITH_WAYDROID_EXTRAS=$<BOOL:${WITH_WAYDROID_EXTRAS}>)
 target_compile_definitions(MaaCore PUBLIC ASST_WITH_EXTRA_CALLERS=$<BOOL:${WITH_EXTRA_CALLERS}>)
 target_compile_definitions(MaaCore PRIVATE ASST_WITH_MAC_SCK=$<BOOL:${WITH_MAC_SCK}>)
 
