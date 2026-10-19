@@ -261,11 +261,15 @@ bool asst::CopilotTask::set_params(const json::value& params)
 
 std::optional<std::filesystem::path> asst::CopilotTask::parse_copilot_filename(const std::string& name)
 {
-    // The GUI may pass a relative path (e.g. `config\copilot\x.json`). Resolve it against the
-    // user directory, since the process working directory is not guaranteed to be the MAA directory.
+    // The GUI may pass a relative path (e.g. `config\copilot\x.json`). Prefer
+    // the process working directory when the file exists there, then fall back
+    // to the user directory, which is what GUI callers mean.
     auto path = utils::path(name);
     if (path.is_relative()) {
-        path = UserDir.get() / path;
+        std::error_code ec;
+        if (!std::filesystem::exists(path, ec)) {
+            path = UserDir.get() / path;
+        }
     }
     if (!Copilot.load(path)) {
         Log.error("CopilotConfig parse failed");
