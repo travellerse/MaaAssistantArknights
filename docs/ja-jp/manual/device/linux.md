@@ -158,6 +158,8 @@ adb の IP アドレスを設定する： `設定` - `バージョン情報` - `
 
 Waydroid には Minitouch に必要な `/dev/input/eventN` がないため、Minitouch は利用できません。他のタッチモードに切り替えてください。
 
+Linux ネイティブの MaaCore ではスクリーンショット拡張を利用できます。KDE では Waydroid ウィンドウを直接取得し（KWin ScreenShot2）、その他のデスクトップでは xdg-desktop-portal の ScreenCast を使用します。初回接続時にウィンドウ選択ダイアログが一度表示されるので、Waydroid のウィンドウを選択してください。選択結果は記憶されます。バックエンドが利用できない場合は ADB のスクリーンショットに自動的にフォールバックします。Windows / macOS 版の MaaCore にはこの機能は含まれません。WPF ユーザーは Waydroid 接続設定を選択すると自動的に有効になります。`AsstSetConnectionExtras` の `waydroid_capture` フィールドで `auto`、`kwin`、`portal`、`off` を指定できます。
+
 ### ✅ [redroid](https://github.com/remote-android/redroid-doc)
 
 Android 11 バージョンのイメージは正常に動作し、5555 adb ポートを公開する必要があります。

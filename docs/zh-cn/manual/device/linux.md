@@ -158,6 +158,8 @@ waydroid prop set persist.waydroid.height 720
 
 Waydroid 没有 Minitouch 所必需的 `/dev/input/eventN`，无法使用 Minitouch，请切换至其他触控模式。
 
+使用 Linux 原生 MaaCore 时支持截图增强：KDE 下直接抓取 Waydroid 窗口（KWin ScreenShot2），其他桌面环境通过 xdg-desktop-portal 的屏幕录制接口取帧。首次连接会弹出一次窗口选择框，选择 Waydroid 窗口即可，选择结果会被记住；后端不可用时自动回退到 ADB 截图。Windows / macOS 版 MaaCore 不包含此功能。WPF 用户选择 Waydroid 连接配置即可自动启用。可通过 `AsstSetConnectionExtras` 的 `waydroid_capture` 字段选择 `auto`、`kwin`、`portal` 或 `off`。
+
 ### ✅ [redroid](https://github.com/remote-android/redroid-doc)
 
 安卓 11 版本的镜像可正常运行游戏, 需要暴露 5555 ADB 端口.
