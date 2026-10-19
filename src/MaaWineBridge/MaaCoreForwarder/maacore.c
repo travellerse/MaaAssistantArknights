@@ -102,6 +102,11 @@ static void cb_state_free(CallbackState* fwd_state)
     free(fwd_state);
 }
 
+// Nonzero while the Wine callback worker is inside the PE callback. If
+// MaaCore re-enters this shim synchronously on that thread, queueing the
+// callback would wait for a worker that is blocked in the current callback.
+static _Thread_local int in_wine_callback = 0;
+
 static void invoke_helper(void* arg)
 {
     // called in win32 thread
@@ -109,7 +114,9 @@ static void invoke_helper(void* arg)
     if (!invocation || !invocation->x64abi_callback) {
         return;
     }
+    in_wine_callback++;
     invocation->x64abi_callback(invocation->msg, invocation->details_json, invocation->custom_arg);
+    in_wine_callback--;
 }
 
 static void UnixCallbackShim(AsstMsgId msg, const char* details_json, void* custom_arg)
@@ -124,6 +131,14 @@ static void UnixCallbackShim(AsstMsgId msg, const char* details_json, void* cust
         .details_json = details_json,
         .custom_arg = state->custom_arg,
     };
+    if (in_wine_callback > 0) {
+        // Already on the Wine callback thread; invoke directly to avoid a
+        // self-deadlock. Destroyed normally arrives on MaaCore's message
+        // thread, never here, and freeing the queue from its own worker
+        // would join the worker.
+        invoke_helper(&invocation);
+        return;
+    }
     Task* task = task_queue_push(state->queue, invoke_helper, &invocation);
     if (task) {
         task_wait(task);
@@ -197,6 +212,9 @@ void __stdcall WineShimAsstDestroy(AsstHandle handle)
     if (!handle) {
         return;
     }
+    // Must not be called synchronously from inside a callback: the shim
+    // blocks MaaCore's message thread until the Wine callback returns, while
+    // AsstDestroy joins that message thread.
     dl_AsstDestroy(handle);
 }
 
