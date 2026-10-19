@@ -269,6 +269,10 @@ AVD スクリーンショット強化モードは MaaFramework 内で実装さ�
 
 2. `タッチモード` で `MaaFwAdb` を選択します。
 
+### Waydroid スクリーンショット強化モード
+
+Waydroid のスクリーンショット拡張は `Waydroid` 接続設定を選択すると自動的に有効になり、追加のスイッチは不要です。Linux ネイティブの MaaCore では、KDE は KWin、その他のデスクトップは `xdg-desktop-portal` 経由で取得します。利用できない場合は ADB のスクリーンショットに自動的にフォールバックします。Wine で WPF を実行する場合は、MaaWineBridge 経由で Linux ネイティブの MaaCore を読み込む必要があります。詳細は [Linux エミュレーターとコンテナ](./device/linux.md) を参照してください。
+
 ## タッチモード
 
 1. [Minitouch](https://github.com/DeviceFarmer/minitouch)：Android タッチイベントを操作するための C 言語で書かれたツールで、`evdev` デバイスを操作し、外部プログラムがタッチイベントとジェスチャーをトリガーできる Socket インターフェースを提供します。Android 10 以降、SELinux が `Enforcing` モードの場合、Minitouch は使用できなくなりました。<sup>[出典](https://github.com/DeviceFarmer/minitouch?tab=readme-ov-file#for-android-10-and-up)</sup>(標準)

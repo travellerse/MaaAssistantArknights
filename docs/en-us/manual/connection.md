@@ -209,6 +209,10 @@ AVD Screenshot Enhanced Mode is implemented in MaaFramework. Touch mode must be 
 
 2. For `Touch Mode`, select `MaaFwAdb`.
 
+### Waydroid Screenshot Enhanced Mode
+
+Waydroid screencap enhancement is enabled automatically by the `Waydroid` connection preset; no separate switch is needed. With the native Linux MaaCore, KDE captures the window through KWin and other desktops use `xdg-desktop-portal`; if unavailable, MAA falls back to ADB screencap. WPF under Wine requires the native Linux MaaCore through MaaWineBridge. See [Linux Emulators and Containers](./device/linux.md).
+
 ## Touch Mode
 
 1. [Minitouch](https://github.com/DeviceFarmer/minitouch): An Android touch event handler written in C that operates on `evdev` devices and provides a Socket interface for external programs to trigger touch events and gestures. Starting with Android 10, Minitouch is no longer available when SELinux is in `Enforcing` mode.<sup>[source](https://github.com/DeviceFarmer/minitouch?tab=readme-ov-file#for-android-10-and-up)</sup> (Default)

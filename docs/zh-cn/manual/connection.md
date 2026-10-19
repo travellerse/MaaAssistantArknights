@@ -211,6 +211,10 @@ AVD 截图增强模式在 MaaFramework 中实现，必须选择 MaaFwAdb 触控�
 
 2. `触控模式` 选择 `MaaFwAdb`。
 
+### Waydroid 截图增强模式
+
+Waydroid 的截图增强会随 `Waydroid` 连接配置自动启用，无需额外开关。使用 Linux 原生 MaaCore 时，KDE 下通过 KWin 直接抓取窗口，其他桌面通过 `xdg-desktop-portal` 取帧；不可用时自动回退 ADB 截图。使用 Wine 运行 WPF 时，需通过 MaaWineBridge 加载 Linux 原生 MaaCore。详见 [Linux 模拟器与容器](./device/linux.md)。
+
 ## 触控模式
 
 1. [Minitouch](https://github.com/DeviceFarmer/minitouch)：使用 C 编写的 Android 触控事件器，操作 `evdev` 设备，提供 Socket 接口供外部程序触发触控事件和手势。从 Android 10 开始，Minitouch 在 SELinux 为 `Enforcing` 模式时不再可用。<sup>[源](https://github.com/DeviceFarmer/minitouch?tab=readme-ov-file#for-android-10-and-up)</sup>（默认）

@@ -158,7 +158,31 @@ waydroid prop set persist.waydroid.height 720
 
 Waydroid 沒有 Minitouch 所必需的 `/dev/input/eventN`，無法使用 Minitouch，請切換至其他觸控模式。
 
-使用 Linux 原生 MaaCore 時支援截圖增強：KDE 下直接擷取 Waydroid 視窗（KWin ScreenShot2），其他桌面環境透過 xdg-desktop-portal 的螢幕錄製介面取得畫面。首次連線會彈出一次視窗選擇框，選擇 Waydroid 視窗即可，選擇結果會被記住；後端無法使用時會自動回退到 ADB 截圖。Windows / macOS 版 MaaCore 不包含此功能。WPF 使用者選擇 Waydroid 連線設定即可自動啟用。可透過 `AsstSetConnectionExtras` 的 `waydroid_capture` 欄位選擇 `auto`、`kwin`、`portal` 或 `off`。
+#### 截圖增強
+
+使用 Linux 原生 MaaCore（maa-cli、Python 或 MaaWineBridge）時，MaaCore 會直接擷取宿主上的 Waydroid 視窗，不再透過 ADB `screencap` 取圖：
+
+- KDE：透過 KWin 的 `ScreenShot2` 介面直接擷取 Waydroid 視窗，視窗被遮擋或最小化時仍可擷取。
+- 其他桌面：透過 `xdg-desktop-portal` 的 `ScreenCast` 介面取得畫面。首次使用會彈出一次視窗選擇框，選擇 Waydroid 視窗即可，選擇結果會自動儲存。部分 Portal 實作只支援螢幕擷取，此時請讓 Waydroid 全螢幕執行。
+- 以上方式無法使用時會自動回退到 ADB 截圖，不影響連線。
+
+在同一台機器上，KWin 路徑的截圖耗時通常為數毫秒，Portal 路徑通常為十餘毫秒，均明顯低於 ADB `screencap` 的數十到上百毫秒；實際數值取決於桌面環境、視窗更新狀態與系統負載。
+
+WPF 使用者可在連線設定中選擇 `Waydroid` 設定，觸控模式選擇 `MaaTouch`。透過 Wine 執行 WPF 時，需要透過 MaaWineBridge 載入 Linux 原生 MaaCore；Windows / macOS 版 MaaCore 不包含此功能。
+
+可透過 `AsstSetConnectionExtras("Waydroid", ...)` 指定後端：
+
+```json
+{"waydroid_capture": "auto"}
+```
+
+`waydroid_capture` 可取 `auto`（預設）、`kwin`、`portal` 或 `off`；物件形式還可指定 KWin 視窗匹配字串：
+
+```json
+{"waydroid_capture": {"mode": "kwin", "window": "waydroid.com.hypergryph.arknights"}}
+```
+
+Portal 的視窗選擇儲存在 `$XDG_STATE_HOME/maa/waydroid-portal.token`（預設 `~/.local/state/maa/waydroid-portal.token`）。需要重新選擇視窗時，刪除該檔案後重新連線即可。
 
 ### ✅ [redroid](https://github.com/remote-android/redroid-doc)
 
