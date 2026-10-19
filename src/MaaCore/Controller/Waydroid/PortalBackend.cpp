@@ -1012,6 +1012,28 @@ void PortalBackend::on_process()
                 return;
             }
             const pwabi::SpaData& data = spa_buffer->datas[0];
+            uint32_t transform = 0;
+            if (spa_buffer->metas != nullptr) {
+                for (uint32_t meta_index = 0; meta_index < spa_buffer->n_metas; ++meta_index) {
+                    const pwabi::SpaMeta& meta = spa_buffer->metas[meta_index];
+                    if (meta.type == pwabi::kMetaVideoTransform && meta.data != nullptr &&
+                        meta.size >= sizeof(uint32_t)) {
+                        transform = *static_cast<const uint32_t*>(meta.data);
+                        break;
+                    }
+                }
+            }
+            if (transform != 0) {
+                static bool transform_warned = false;
+                if (!transform_warned) {
+                    transform_warned = true;
+                    LogWarn << "Waydroid portal: unsupported video transform" << VAR(transform);
+                }
+                m_stream_error = true;
+                m_frame_ready.notify_all();
+                pw.stream_queue_buffer(pw.stream, buffer);
+                return;
+            }
             const int width = m_stream_width;
             const int height = m_stream_height;
             const int row_bytes = width * 4;
