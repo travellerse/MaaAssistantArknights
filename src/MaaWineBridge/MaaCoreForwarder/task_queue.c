@@ -22,9 +22,11 @@ struct _TaskQueue
     int head;
     int tail;
     int stop;
+    int producers;
     pthread_mutex_t mutex;
     pthread_cond_t cond_not_empty;
     pthread_cond_t cond_not_full;
+    pthread_cond_t cond_producers;
     TaskQueueWorkerFactory worker_factory;
     int worker_count;
     TaskQueueWorker* workers[MAX_WORKERS];
@@ -122,6 +124,7 @@ TaskQueue* task_queue_new(TaskQueueWorkerFactory worker_factory)
     queue->head = 0;
     queue->tail = 0;
     queue->stop = 0;
+    queue->producers = 0;
     queue->worker_factory = worker_factory;
     queue->worker_count = 0;
 
@@ -142,9 +145,17 @@ TaskQueue* task_queue_new(TaskQueueWorkerFactory worker_factory)
         free(queue);
         return NULL;
     }
+    if (pthread_cond_init(&queue->cond_producers, NULL) != 0) {
+        pthread_cond_destroy(&queue->cond_not_full);
+        pthread_cond_destroy(&queue->cond_not_empty);
+        pthread_mutex_destroy(&queue->mutex);
+        free(queue);
+        return NULL;
+    }
 
     TaskQueueWorker* worker = worker_factory(queue);
     if (!worker) {
+        pthread_cond_destroy(&queue->cond_producers);
         pthread_cond_destroy(&queue->cond_not_full);
         pthread_cond_destroy(&queue->cond_not_empty);
         pthread_mutex_destroy(&queue->mutex);
@@ -177,10 +188,13 @@ void task_queue_free(TaskQueue* queue)
         queue->workers[i] = NULL;
     }
 
-    // MaaCore joins its callback threads before emitting Destroyed, so no
-    // producer can be inside task_queue_push anymore. Wake any caller that
-    // is still waiting for a queued task and drop the queue's reference.
+    // Destroyed is emitted after MaaCore has joined its callback threads, so
+    // no new producer can enter. Wait for one that was already blocked in
+    // task_queue_push before tearing down the synchronization primitives.
     pthread_mutex_lock(&queue->mutex);
+    while (queue->producers > 0) {
+        pthread_cond_wait(&queue->cond_producers, &queue->mutex);
+    }
     while (queue->head != queue->tail) {
         Task* task = queue->tasks[queue->head];
         queue->head = (queue->head + 1) % MAX_TASKS;
@@ -192,7 +206,17 @@ void task_queue_free(TaskQueue* queue)
     pthread_mutex_destroy(&queue->mutex);
     pthread_cond_destroy(&queue->cond_not_empty);
     pthread_cond_destroy(&queue->cond_not_full);
+    pthread_cond_destroy(&queue->cond_producers);
     free(queue);
+}
+
+static void producer_leave(TaskQueue* queue)
+{
+    // called with queue->mutex held
+    queue->producers--;
+    if (queue->producers == 0) {
+        pthread_cond_signal(&queue->cond_producers);
+    }
 }
 
 Task* task_queue_push(TaskQueue* queue, TaskFunc function, void* arg)
@@ -202,16 +226,19 @@ Task* task_queue_push(TaskQueue* queue, TaskFunc function, void* arg)
     }
 
     pthread_mutex_lock(&queue->mutex);
+    queue->producers++;
     while (!queue->stop && (queue->tail + 1) % MAX_TASKS == queue->head) {
         pthread_cond_wait(&queue->cond_not_full, &queue->mutex);
     }
     if (queue->stop) {
+        producer_leave(queue);
         pthread_mutex_unlock(&queue->mutex);
         return NULL;
     }
 
     Task* task = task_new(function, arg);
     if (!task) {
+        producer_leave(queue);
         pthread_mutex_unlock(&queue->mutex);
         return NULL;
     }
@@ -225,6 +252,7 @@ Task* task_queue_push(TaskQueue* queue, TaskFunc function, void* arg)
     queue->tasks[queue->tail] = task;
     queue->tail = (queue->tail + 1) % MAX_TASKS;
 
+    producer_leave(queue);
     pthread_cond_signal(&queue->cond_not_empty);
     pthread_mutex_unlock(&queue->mutex);
 
