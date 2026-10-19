@@ -3,8 +3,8 @@
 // Minimal ABI subset of PipeWire/SPA. The client libraries are loaded with
 // dlopen so that MaaCore keeps building against MaaDeps without adding a
 // PipeWire dependency. These layouts are part of the stable SPA ABI; the
-// numeric values were taken from spa 0.2 / pipewire 0.3 headers (checked by
-// static_assert against the real headers during development).
+// values are cross-checked against the real headers by
+// unit_test/MaaCore/WaydroidAbiTest.cpp when they are installed.
 
 #include <array>
 #include <cstddef>
@@ -120,13 +120,20 @@ struct PwStreamEvents
 
 // spa/utils/type.h
 inline constexpr uint32_t kTypeId = 3;
+inline constexpr uint32_t kTypeInt = 4;
 inline constexpr uint32_t kTypeRectangle = 10;
 inline constexpr uint32_t kTypeChoice = 19;
 inline constexpr uint32_t kObjectFormat = 0x40003;
+inline constexpr uint32_t kObjectParamBuffers = 0x40004;
 
 // spa/param/param.h
 inline constexpr uint32_t kParamEnumFormat = 3;
 inline constexpr uint32_t kParamFormat = 4;
+inline constexpr uint32_t kParamBuffers = 5;
+
+// spa/param/buffers.h
+inline constexpr uint32_t kParamBuffersBuffers = 1;
+inline constexpr uint32_t kParamBuffersDataType = 6;
 
 // spa/param/format.h
 inline constexpr uint32_t kFormatMediaType = 1;
@@ -145,13 +152,15 @@ inline constexpr uint32_t kVideoFormatBGRA = 12;
 // spa/pod/pod.h
 inline constexpr uint32_t kChoiceRange = 1;
 inline constexpr uint32_t kChoiceEnum = 3;
+inline constexpr uint32_t kChoiceFlags = 4;
 
 // spa/buffer/buffer.h
 inline constexpr uint32_t kDataMemPtr = 1;
 inline constexpr uint32_t kDataMemFd = 2;
+inline constexpr uint32_t kDataDmaBuf = 3;
 
 // spa/buffer/meta.h
-inline constexpr uint32_t kMetaVideoTransform = 7;
+inline constexpr uint32_t kMetaVideoTransform = 8;
 
 // pipewire/stream.h
 inline constexpr uint32_t kVersionStreamEvents = 2;
