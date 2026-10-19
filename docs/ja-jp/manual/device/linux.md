@@ -163,12 +163,12 @@ Waydroid には Minitouch に必要な `/dev/input/eventN` がないため、Min
 Linux ネイティブの MaaCore（maa-cli、Python、MaaWineBridge）を使用すると、ADB `screencap` を使わずにホスト上の Waydroid ウィンドウを直接取得します：
 
 - KDE：KWin の `ScreenShot2` で Waydroid ウィンドウを直接取得します。ウィンドウが隠れている場合や最小化されている場合でも取得できます。
-- その他のデスクトップ：`xdg-desktop-portal` の `ScreenCast` でフレームを取得します。初回はウィンドウ選択ダイアログが一度表示されるので、Waydroid のウィンドウを選択してください。選択結果は保存されます。Portal の実装によってはモニター全体の取得のみに対応している場合があります。その場合は Waydroid を全画面で実行してください。
+- その他のデスクトップ：`xdg-desktop-portal` の `ScreenCast` でフレームを取得します。初回はウィンドウ選択ダイアログが一度表示されるので、Waydroid のウィンドウを選択してください。選択結果は保存されます。現時点では KDE の Portal 実装でのみ検証済みで、GNOME など他の実装は未検証です。取得に失敗した場合は ADB にフォールバックします。Portal の実装によってはモニター全体の取得のみに対応している場合があります。その場合は Waydroid を全画面で実行してください。
 - これらのバックエンドが利用できない場合は、自動的に ADB のスクリーンショットにフォールバックします。接続には影響しません。
 
 同じマシンでは、KWin 経路は通常数ミリ秒、Portal 経路は通常十数ミリ秒で、ADB `screencap` の数十〜百ミリ秒より大幅に高速です。実際の値はデスクトップ環境、ウィンドウの更新状態、システム負荷によって異なります。
 
-WPF ユーザーは接続設定で `Waydroid` を選択し、タッチモードを `MaaTouch` にしてください。Wine で WPF を実行する場合は、MaaWineBridge 経由で Linux ネイティブの MaaCore を読み込む必要があります。Windows / macOS 版の MaaCore にはこの機能は含まれません。
+WPF ユーザーは接続設定で `Waydroid` を選択し、タッチモードを `MaaTouch` にしてください。Wine で WPF を実行する場合は、MaaWineBridge 経由で Linux ネイティブの MaaCore を読み込む必要があります。Windows / macOS 版の MaaCore にはこの機能は含まれません。`Waydroid` 設定の既定アドレスは `192.168.240.112:5555`（Waydroid の既定 NAT アドレス）です。Waydroid のネットワーク設定を変更した場合は適宜修正してください。
 
 `AsstSetConnectionExtras("Waydroid", ...)` でバックエンドを指定できます：
 
