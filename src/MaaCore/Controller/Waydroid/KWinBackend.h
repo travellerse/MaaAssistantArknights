@@ -3,6 +3,7 @@
 #include "CaptureBackend.h"
 #include "DBus.h"
 
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -27,6 +28,10 @@ public:
     bool start(int width, int height, std::string_view selector) override;
     std::optional<Frame> capture() override;
     void stop() noexcept override;
+
+    // True when KWin's scripting interface answered during the last attempt.
+    // The capture manager uses this to retry later when no window exists yet.
+    [[nodiscard]] bool reachable() const noexcept { return m_kwin_reachable; }
 
 private:
     bool connect_bus();
@@ -53,7 +58,10 @@ private:
     int m_expected_height = 0;
 
     bool m_reported = false;
+    bool m_kwin_reachable = false;
     std::string m_report;
+
+    std::chrono::steady_clock::time_point m_last_discovery {};
 
     uint64_t m_frame_id = 0;
 };
