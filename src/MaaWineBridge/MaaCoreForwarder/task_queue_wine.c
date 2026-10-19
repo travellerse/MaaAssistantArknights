@@ -1,5 +1,4 @@
 #include "task_queue_wine.h"
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 
@@ -13,7 +12,7 @@ typedef struct _TaskQueueWorkerWine
 {
     TaskQueueWorker base;
     atomic_int ref_count;
-    pthread_t posix_thread;
+    HANDLE thread;
 } TaskQueueWorkerWine;
 
 static void task_queue_worker_wine_addref(TaskQueueWorker* worker)
@@ -26,6 +25,9 @@ static void task_queue_worker_wine_release(TaskQueueWorker* worker)
 {
     TaskQueueWorkerWine* worker_wine = (TaskQueueWorkerWine*)worker;
     if (atomic_fetch_sub(&worker_wine->ref_count, 1) == 1) {
+        if (worker_wine->thread) {
+            CloseHandle(worker_wine->thread);
+        }
         free(worker_wine);
     }
 }
@@ -33,13 +35,18 @@ static void task_queue_worker_wine_release(TaskQueueWorker* worker)
 static void task_queue_worker_wine_join(TaskQueueWorker* worker)
 {
     TaskQueueWorkerWine* worker_wine = (TaskQueueWorkerWine*)worker;
-    pthread_join(worker_wine->posix_thread, NULL);
+    if (!worker_wine->thread) {
+        return;
+    }
+    // WaitForSingleObject is used instead of pthread_join because this
+    // worker is a Wine thread, and its pthread_t is only known once the
+    // worker starts running.
+    WaitForSingleObject(worker_wine->thread, INFINITE);
 }
 
 static DWORD WINAPI worker(void* arg)
 {
     TaskQueueWorkerWine* worker = arg;
-    worker->posix_thread = pthread_self();
     TaskQueue* queue = worker->base.queue;
     while (1) {
         Task* task = task_queue_pop(queue);
@@ -54,17 +61,20 @@ static DWORD WINAPI worker(void* arg)
 
 TaskQueueWorker* task_queue_worker_wine_new(TaskQueue* queue)
 {
-    TaskQueueWorkerWine* worker_wine = malloc(sizeof(TaskQueueWorkerWine));
+    TaskQueueWorkerWine* worker_wine = calloc(1, sizeof(TaskQueueWorkerWine));
+    if (!worker_wine) {
+        return NULL;
+    }
     worker_wine->base.queue = queue;
     worker_wine->base.addref = task_queue_worker_wine_addref;
     worker_wine->base.release = task_queue_worker_wine_release;
     worker_wine->base.join = task_queue_worker_wine_join;
     atomic_init(&worker_wine->ref_count, 1);
-    HANDLE thr = CreateThread(NULL, 0, worker, worker_wine, 0, NULL);
-    if (thr == NULL) {
+
+    worker_wine->thread = CreateThread(NULL, 0, worker, worker_wine, 0, NULL);
+    if (!worker_wine->thread) {
         free(worker_wine);
         return NULL;
     }
-    CloseHandle(thr);
     return (TaskQueueWorker*)worker_wine;
 }
