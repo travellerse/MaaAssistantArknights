@@ -158,6 +158,8 @@ The game only supports the ARM architecture. On x64, you need to install an arm6
 
 Waydroid lacks the `/dev/input/eventN` devices necessary for Minitouch, so Minitouch will fail. Please switch to other touch modes.
 
+Screencap enhancement is available when using the native Linux MaaCore. On KDE it captures the Waydroid window directly (KWin ScreenShot2); other desktops use the xdg-desktop-portal ScreenCast interface. The first connection shows a one-time window picker; select the Waydroid window and the choice is remembered. If the backend is unavailable, MAA falls back to ADB screencap. The Windows and macOS MaaCore builds do not include this feature. WPF users can enable it by selecting the Waydroid connection config. The `waydroid_capture` field of `AsstSetConnectionExtras` accepts `auto`, `kwin`, `portal`, or `off`.
+
 ### ✅ [redroid](https://github.com/remote-android/redroid-doc)
 
 Android 11 version images can run the game normally. Make sure to expose port 5555 for ADB.

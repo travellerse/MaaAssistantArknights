@@ -158,6 +158,8 @@ adb의 IP 주소 설정: `설정` - `정보` - `IP 주소`를 열고 첫 번째 
 
 Waydroid에는 Minitouch에 필수적인 `/dev/input/eventN`이 없으므로 Minitouch를 사용할 수 없습니다. 다른 터치 모드로 전환하세요.
 
+Linux 네이티브 MaaCore에서는 스크린샷 향상을 사용할 수 있습니다. KDE에서는 Waydroid 창을 직접 캡처하고(KWin ScreenShot2), 다른 데스크톱에서는 xdg-desktop-portal ScreenCast를 사용합니다. 처음 연결할 때 창 선택 대화상자가 한 번 표시되며 Waydroid 창을 선택하면 그 선택이 기억됩니다. 백엔드를 사용할 수 없으면 ADB 스크린샷으로 자동 전환됩니다. Windows/macOS용 MaaCore에는 이 기능이 포함되지 않습니다. WPF 사용자는 Waydroid 연결 설정을 선택하면 자동으로 활성화됩니다. `AsstSetConnectionExtras`의 `waydroid_capture` 필드에 `auto`, `kwin`, `portal`, `off`를 지정할 수 있습니다.
+
 ### ✅ [redroid](https://github.com/remote-android/redroid-doc)
 
 안드로이드 11 버전 이미지는 게임을 정상적으로 실행합니다. 5555 adb 포트를 공개해야 합니다.
