@@ -396,6 +396,16 @@ void asst::AdbController::close_socket() noexcept
     m_platform_io->close_socket();
 }
 
+#if ASST_WITH_WAYDROID_EXTRAS
+void asst::AdbController::init_waydroid_extras(const AdbCfg& adb_cfg, const std::string& config)
+{
+    if (config != "Waydroid" && !adb_cfg.extras.contains("waydroid_capture")) {
+        return;
+    }
+    m_waydroid_extras.init(adb_cfg.extras, m_width, m_height);
+}
+#endif
+
 std::optional<unsigned short> asst::AdbController::init_socket(const std::string& local_address)
 {
     return m_platform_io->init_socket(local_address);
@@ -404,6 +414,9 @@ std::optional<unsigned short> asst::AdbController::init_socket(const std::string
 void asst::AdbController::clear_info() noexcept
 {
     m_inited = false;
+#if ASST_WITH_WAYDROID_EXTRAS
+    m_waydroid_extras.uninit();
+#endif
     // 等待可能仍在执行的异步帧率检测
     if (m_fps_future.valid()) {
         m_fps_future.wait();
@@ -793,6 +806,32 @@ bool asst::AdbController::screencap(cv::Mat& image_payload, bool allow_reconnect
             all_methods_cost.emplace_back(AdbProperty::ScreencapMethod::Encode, "???");
         }
 
+#if ASST_WITH_WAYDROID_EXTRAS
+        if (m_waydroid_extras.enabled()) {
+            const auto setup_start = steady_clock::now();
+            const bool prepared = m_waydroid_extras.prepare();
+            const auto setup_cost = duration_cast<milliseconds>(steady_clock::now() - setup_start);
+            LogInfo << "WaydroidExtras setup cost" << setup_cost.count() << "ms" << VAR(prepared);
+
+            start_time = steady_clock::now();
+            if (prepared && m_waydroid_extras.screencap()) {
+                auto duration = duration_cast<milliseconds>(steady_clock::now() - start_time);
+                if (m_waydroid_extras.forced() || duration < min_cost) {
+                    fastest_method = AdbProperty::ScreencapMethod::WaydroidExtras;
+                    m_inited = true;
+                    min_cost = duration;
+                }
+                LogInfo << "WaydroidExtras cost" << duration.count() << "ms";
+                all_methods_cost.emplace_back(
+                    AdbProperty::ScreencapMethod::WaydroidExtras,
+                    std::to_string(duration.count()));
+            }
+            else {
+                LogInfo << "WaydroidExtras is not supported";
+                all_methods_cost.emplace_back(AdbProperty::ScreencapMethod::WaydroidExtras, "???");
+            }
+        }
+#endif
 #if ASST_WITH_EMULATOR_EXTRAS
         if (m_mumu_extras.inited()) {
             start_time = steady_clock::now();
@@ -833,6 +872,12 @@ bool asst::AdbController::screencap(cv::Mat& image_payload, bool allow_reconnect
 #endif
 
         m_adb.screencap_method = fastest_method;
+#if ASST_WITH_WAYDROID_EXTRAS
+        if (m_adb.screencap_method != AdbProperty::ScreencapMethod::WaydroidExtras) {
+            // Release the compositor/portal session when another method wins.
+            m_waydroid_extras.uninit();
+        }
+#endif
 
         static const std::unordered_map<AdbProperty::ScreencapMethod, std::string> MethodName = {
             { AdbProperty::ScreencapMethod::UnknownYet, "UnknownYet" },
@@ -842,6 +887,9 @@ bool asst::AdbController::screencap(cv::Mat& image_payload, bool allow_reconnect
 #if ASST_WITH_EMULATOR_EXTRAS
             { AdbProperty::ScreencapMethod::MumuExtras, "MumuExtras" },
             { AdbProperty::ScreencapMethod::LDExtras, "LDExtras" },
+#endif
+#if ASST_WITH_WAYDROID_EXTRAS
+            { AdbProperty::ScreencapMethod::WaydroidExtras, "WaydroidExtras" },
 #endif
         };
         Log.info("The fastest way is", MethodName.at(m_adb.screencap_method), ", cost:", min_cost.count(), "ms");
@@ -880,6 +928,22 @@ bool asst::AdbController::screencap(cv::Mat& image_payload, bool allow_reconnect
         case AdbProperty::ScreencapMethod::Encode:
             screencap_result = screencap(m_adb.screencap_encode, decode_encode, allow_reconnect);
             break;
+#if ASST_WITH_WAYDROID_EXTRAS
+        case AdbProperty::ScreencapMethod::WaydroidExtras: {
+            auto img_opt = m_waydroid_extras.screencap();
+            screencap_result = img_opt.has_value() ? ScreencapResult::Success : ScreencapResult::Reprobe;
+
+            if (screencap_result != ScreencapResult::Success && allow_reconnect) {
+                m_waydroid_extras.reload(m_width, m_height);
+                img_opt = m_waydroid_extras.screencap();
+                screencap_result = img_opt.has_value() ? ScreencapResult::Success : ScreencapResult::Reprobe;
+            }
+
+            if (img_opt) {
+                image_payload = std::move(*img_opt);
+            }
+        } break;
+#endif
 #if ASST_WITH_EMULATOR_EXTRAS
         case AdbProperty::ScreencapMethod::MumuExtras: {
             auto img_opt = m_mumu_extras.screencap();
@@ -1387,6 +1451,9 @@ bool asst::AdbController::connect(const std::string& adb_path, const std::string
     else if (config == "LDPlayer") {
         init_ld_extras(adb_cfg, address);
     }
+#if ASST_WITH_WAYDROID_EXTRAS
+    init_waydroid_extras(adb_cfg, config);
+#endif
     if (need_exit()) {
         return false;
     }
