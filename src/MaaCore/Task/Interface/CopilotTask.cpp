@@ -1,5 +1,7 @@
 #include "CopilotTask.h"
 
+#include <algorithm>
+
 #include "Arknights-Tile-Pos/TileCalc2.hpp"
 
 #include "Common/AsstBattleDef.h"
@@ -14,6 +16,7 @@
 #include "Task/ProcessTask.h"
 #include "Utils/Logger.hpp"
 #include "Utils/Platform.hpp"
+#include "Utils/WorkingDir.hpp"
 
 asst::CopilotTask::CopilotTask(const AsstCallback& callback, Assistant* inst) :
     InterfaceTask(callback, inst, TaskType),
@@ -258,7 +261,12 @@ bool asst::CopilotTask::set_params(const json::value& params)
 
 std::optional<std::filesystem::path> asst::CopilotTask::parse_copilot_filename(const std::string& name)
 {
+    // The GUI may pass a relative path (e.g. `config\copilot\x.json`). Resolve it against the
+    // user directory, since the process working directory is not guaranteed to be the MAA directory.
     auto path = utils::path(name);
+    if (path.is_relative()) {
+        path = UserDir.get() / path;
+    }
     if (!Copilot.load(path)) {
         Log.error("CopilotConfig parse failed");
         // 发结构化错误让 GUI 报准确原因，避免落到通用启动失败兜底

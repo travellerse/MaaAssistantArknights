@@ -1,9 +1,12 @@
 #pragma once
 
+#include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <filesystem>
 #include <new>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
@@ -27,7 +30,21 @@ using os_string = std::filesystem::path::string_type;
 
 inline std::filesystem::path path(const os_string& os_str)
 {
+#ifdef _WIN32
     return std::filesystem::path(os_str);
+#else
+    // 经 Wine 运行时，Windows GUI 传来的是 `Z:\dir\file` 形式的路径，POSIX 的 path 既不认盘符也不把 `\`
+    // 当分隔符，整串会被降级成相对路径。Wine 把 Z: 映射到文件系统根，故剥掉盘符并换用 `/`。
+    const std::string_view utf8_view = os_str;
+    const bool has_drive = utf8_view.size() >= 3 && std::isalpha(static_cast<unsigned char>(utf8_view[0])) &&
+                           utf8_view[1] == ':' && (utf8_view[2] == '\\' || utf8_view[2] == '/');
+    if (!has_drive && utf8_view.find('\\') == std::string_view::npos) {
+        return std::filesystem::path(os_str);
+    }
+    std::string posix_path = has_drive ? std::string(utf8_view.substr(2)) : std::string(utf8_view);
+    std::replace(posix_path.begin(), posix_path.end(), '\\', '/');
+    return std::filesystem::path(posix_path);
+#endif
 }
 
 #ifdef _WIN32
