@@ -842,6 +842,7 @@
     <system:String x:Key="Connection.Config.PC">明日方舟 PC 端（社区维护）</system:String>
     <system:String x:Key="Connection.Config.SecondResolution">第二分辨率</system:String>
     <system:String x:Key="Connection.Config.WSA">WSA 旧版本</system:String>
+    <system:String x:Key="Connection.Config.Waydroid">Waydroid</system:String>
     <system:String x:Key="Connection.Config.XYAZ">逍遥模拟器</system:String>
     <system:String x:Key="Connection.ConnectFailed">连接失败</system:String>
     <system:String x:Key="Connection.Connecting">正在连接模拟器……</system:String>

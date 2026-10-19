@@ -842,6 +842,7 @@ MAA를 독립된 새 폴더에 압축 해제하거나, MAA에 속하지 않는 D
     <system:String x:Key="Connection.Config.PC">명일방주 PC 클라이언트 (커뮤니티 유지보수)</system:String>
     <system:String x:Key="Connection.Config.SecondResolution">분할 화면</system:String>
     <system:String x:Key="Connection.Config.WSA">WSA 레거시 버전</system:String>
+    <system:String x:Key="Connection.Config.Waydroid">Waydroid</system:String>
     <system:String x:Key="Connection.Config.XYAZ">MEmu</system:String>
     <system:String x:Key="Connection.ConnectFailed">연결 실패</system:String>
     <system:String x:Key="Connection.Connecting">에뮬레이터에 연결 중……</system:String>

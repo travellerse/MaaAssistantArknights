@@ -843,6 +843,7 @@ MAA を新しい独立したフォルダーに解凍するか、MAA に属さな
     <system:String x:Key="Connection.Config.PC">アークナイツ PC クライアント（コミュニティ保守）</system:String>
     <system:String x:Key="Connection.Config.SecondResolution">2番目の決議</system:String>
     <system:String x:Key="Connection.Config.WSA">古いバージョンのWSA</system:String>
+    <system:String x:Key="Connection.Config.Waydroid">Waydroid</system:String>
     <system:String x:Key="Connection.Config.XYAZ">MEmu</system:String>
     <system:String x:Key="Connection.ConnectFailed">接続失敗</system:String>
     <system:String x:Key="Connection.Connecting">エミュレータ接続中……</system:String>

@@ -842,6 +842,7 @@ Please ensure only the target emulator is running during detection. Running mult
     <system:String x:Key="Connection.Config.PC">Arknights PC Client (Community-maintained)</system:String>
     <system:String x:Key="Connection.Config.SecondResolution">2nd Resolution</system:String>
     <system:String x:Key="Connection.Config.WSA">Old version of WSA</system:String>
+    <system:String x:Key="Connection.Config.Waydroid">Waydroid</system:String>
     <system:String x:Key="Connection.Config.XYAZ">MEmu</system:String>
     <system:String x:Key="Connection.ConnectFailed">Connection Failed</system:String>
     <system:String x:Key="Connection.Connecting">Connecting to emulator……</system:String>
