@@ -158,7 +158,31 @@ adb の IP アドレスを設定する： `設定` - `バージョン情報` - `
 
 Waydroid には Minitouch に必要な `/dev/input/eventN` がないため、Minitouch は利用できません。他のタッチモードに切り替えてください。
 
-Linux ネイティブの MaaCore ではスクリーンショット拡張を利用できます。KDE では Waydroid ウィンドウを直接取得し（KWin ScreenShot2）、その他のデスクトップでは xdg-desktop-portal の ScreenCast を使用します。初回接続時にウィンドウ選択ダイアログが一度表示されるので、Waydroid のウィンドウを選択してください。選択結果は記憶されます。バックエンドが利用できない場合は ADB のスクリーンショットに自動的にフォールバックします。Windows / macOS 版の MaaCore にはこの機能は含まれません。WPF ユーザーは Waydroid 接続設定を選択すると自動的に有効になります。`AsstSetConnectionExtras` の `waydroid_capture` フィールドで `auto`、`kwin`、`portal`、`off` を指定できます。
+#### スクリーンショット拡張
+
+Linux ネイティブの MaaCore（maa-cli、Python、MaaWineBridge）を使用すると、ADB `screencap` を使わずにホスト上の Waydroid ウィンドウを直接取得します：
+
+- KDE：KWin の `ScreenShot2` で Waydroid ウィンドウを直接取得します。ウィンドウが隠れている場合や最小化されている場合でも取得できます。
+- その他のデスクトップ：`xdg-desktop-portal` の `ScreenCast` でフレームを取得します。初回はウィンドウ選択ダイアログが一度表示されるので、Waydroid のウィンドウを選択してください。選択結果は保存されます。Portal の実装によってはモニター全体の取得のみに対応している場合があります。その場合は Waydroid を全画面で実行してください。
+- これらのバックエンドが利用できない場合は、自動的に ADB のスクリーンショットにフォールバックします。接続には影響しません。
+
+同じマシンでは、KWin 経路は通常数ミリ秒、Portal 経路は通常十数ミリ秒で、ADB `screencap` の数十〜百ミリ秒より大幅に高速です。実際の値はデスクトップ環境、ウィンドウの更新状態、システム負荷によって異なります。
+
+WPF ユーザーは接続設定で `Waydroid` を選択し、タッチモードを `MaaTouch` にしてください。Wine で WPF を実行する場合は、MaaWineBridge 経由で Linux ネイティブの MaaCore を読み込む必要があります。Windows / macOS 版の MaaCore にはこの機能は含まれません。
+
+`AsstSetConnectionExtras("Waydroid", ...)` でバックエンドを指定できます：
+
+```json
+{"waydroid_capture": "auto"}
+```
+
+`waydroid_capture` には `auto`（デフォルト）、`kwin`、`portal`、`off` を指定できます。オブジェクト形式では KWin のウィンドウ一致文字列も指定できます：
+
+```json
+{"waydroid_capture": {"mode": "kwin", "window": "waydroid.com.hypergryph.arknights"}}
+```
+
+Portal のウィンドウ選択は `$XDG_STATE_HOME/maa/waydroid-portal.token`（デフォルト `~/.local/state/maa/waydroid-portal.token`）に保存されます。ウィンドウを選択し直す場合は、このファイルを削除して再接続してください。
 
 ### ✅ [redroid](https://github.com/remote-android/redroid-doc)
 

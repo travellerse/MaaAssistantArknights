@@ -158,7 +158,31 @@ The game only supports the ARM architecture. On x64, you need to install an arm6
 
 Waydroid lacks the `/dev/input/eventN` devices necessary for Minitouch, so Minitouch will fail. Please switch to other touch modes.
 
-Screencap enhancement is available when using the native Linux MaaCore. On KDE it captures the Waydroid window directly (KWin ScreenShot2); other desktops use the xdg-desktop-portal ScreenCast interface. The first connection shows a one-time window picker; select the Waydroid window and the choice is remembered. If the backend is unavailable, MAA falls back to ADB screencap. The Windows and macOS MaaCore builds do not include this feature. WPF users can enable it by selecting the Waydroid connection config. The `waydroid_capture` field of `AsstSetConnectionExtras` accepts `auto`, `kwin`, `portal`, or `off`.
+#### Screencap enhancement
+
+When using the native Linux MaaCore (maa-cli, Python, or MaaWineBridge), MaaCore captures the Waydroid window on the host directly instead of using ADB `screencap`:
+
+- KDE: captures the Waydroid window through KWin `ScreenShot2`, even when the window is occluded or minimized.
+- Other desktops: captures frames through the `xdg-desktop-portal` `ScreenCast` interface. The first use shows a one-time window picker; select the Waydroid window and the choice is saved. Some portal implementations only support monitor capture; in that case, run Waydroid fullscreen.
+- If these backends are unavailable, MAA falls back to ADB screencap automatically; the connection is unaffected.
+
+On the same machine, the KWin path typically takes a few milliseconds and the portal path about ten milliseconds, both well below the tens to hundreds of milliseconds of ADB `screencap`. Actual values depend on the desktop, window refresh state, and system load.
+
+WPF users can select the `Waydroid` connection config and choose `MaaTouch` as the touch mode. When running WPF under Wine, load the native Linux MaaCore through MaaWineBridge; the Windows and macOS MaaCore builds do not include this feature.
+
+Use `AsstSetConnectionExtras("Waydroid", ...)` to choose a backend:
+
+```json
+{"waydroid_capture": "auto"}
+```
+
+`waydroid_capture` accepts `auto` (default), `kwin`, `portal`, or `off`. The object form can also specify a KWin window selector:
+
+```json
+{"waydroid_capture": {"mode": "kwin", "window": "waydroid.com.hypergryph.arknights"}}
+```
+
+The portal window selection is stored in `$XDG_STATE_HOME/maa/waydroid-portal.token` (default `~/.local/state/maa/waydroid-portal.token`). Delete this file and reconnect to choose the window again.
 
 ### ✅ [redroid](https://github.com/remote-android/redroid-doc)
 
